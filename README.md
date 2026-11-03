@@ -1,0 +1,431 @@
+# OnePlus Snapdragon Kernel Builder
+
+GitHub Actions pipeline for building selected OnePlus Snapdragon 7 Gen 3(SM7550),
+8 Gen 1(SM8450), 8 Gen 2(SM8550), and 8 Gen 3(SM8650) kernels. The repository contains the build
+pipeline, validation, packaging, and release automation; kernel sources are
+resolved from upstream repositories at build time.
+
+## Supported build profiles
+
+The workflow exposes only device/source combinations that are intentionally
+configured. This avoids late failures caused by selecting an incompatible SoC
+and source independently.
+
+| SoC | Target device | AnyKernel accepted device IDs | Source preset |
+| --- | --- | --- | --- |
+| `sm7550` | OnePlus Nord CE4 | `benz`, `OP5D3FL1`, `CPH2613` | Nord CE4 development |
+| `sm7550` | OnePlus Nord CE4 | `benz`, `OP5D3FL1`, `CPH2613` | crDroid (recommended for crDroid) |
+| `sm8450` | OnePlus 10 Pro | `negroni`, `OP516EL1`, `OP516FL1` | OnePlus official |
+| `sm8450` | OnePlus 10T / Ace Pro | `ovaltine`, `OP5551L1`, `OP5552L1` | LineageOS community |
+| `sm8550` | OnePlus 11 | `salami`, `OP591BL1`, `OP594DL1` | OnePlus official |
+| `sm8550` | OnePlus 11 | `salami`, `OP591BL1`, `OP594DL1` | LunarisOS |
+| `sm8550` | OnePlus 11 / 12R / Ace 3 | OnePlus 11 IDs plus `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | LineageOS |
+| `sm8550` | OnePlus 11 / 12R / Ace 3 | OnePlus 11 IDs plus `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | crDroid |
+| `sm8550` | OnePlus 12R / Ace 3 | `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | OnePlus 12R development |
+| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | OnePlus official |
+| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | LineageOS |
+| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | crDroid |
+
+The OnePlus 10T community source is intentionally labeled `ovaltine`; it is
+not presented as a OnePlus 10 Pro source.
+
+The Nord CE4 source projects store their SM7550/crow device support in
+`sm8550`-named kernel and modules repositories and build it with the Kalama
+GKI fragments plus the benz-specific `CONFIG_OPLUS_DEVICE_DTBS=y` and
+`CONFIG_BENZ_DTB=y` make flags. The profiles keep the real `sm7550` device
+identity in release metadata while resolving that upstream naming explicitly.
+Use the dedicated crDroid profile on crDroid: it resolves crDroid's own
+kernel and modules instead of the unrelated development/Lineage branch, which
+is not ABI-compatible with crDroid's first-stage vendor modules.
+
+The OnePlus 12 LineageOS and crDroid profiles also reproduce both device-tree
+make assignments, `CONFIG_OPLUS_DEVICE_DTBS=y` from the shared SM8650
+BoardConfig and `CONFIG_WAFFLE_DTB=y` from the waffle BoardConfig, on every
+make invocation and record them in build provenance. Command-line Kbuild
+assignments are not expected to be written back to `.config`; keeping them on
+the make command line matches how the ROM builds its kernel and external
+modules.
+
+The OnePlus 12 crDroid profile has an optional **ROM GKI module compatibility**
+mode for a boot-only custom Image. A custom Image generates a new module signing
+key, while the installed ROM keeps its `system_dlkm` GKI modules. On affected
+builds, `rfkill.ko` is rejected with `exports protected symbol rfkill_alloc`,
+which prevents the dependent `qca_cld3_kiwi_v2` Wi-Fi driver from loading.
+Selecting `Use existing ROM system_dlkm modules (experimental)` disables
+`CONFIG_MODULE_SIG_PROTECT` for that build while retaining module signature
+parsing and module version checks. It allows modules whose signature cannot be
+verified with this Image's newly generated key, so only use it with ROM modules
+you trust. This can let the existing ROM modules load, but it reduces GKI
+protected-symbol enforcement and does not guarantee
+compatibility if module CRCs or firmware differ. The default remains strict.
+The chosen mode is recorded in `build-info.json` and in the ZIP filename.
+The OnePlus 12 crDroid flashable ZIP also replaces AnyKernel's 32-bit ARM
+BusyBox and MagiskBoot with pinned arm64 versions from Magisk 30.7. The device
+reports `arm64-v8a` and cannot execute the old 32-bit MagiskBoot; the package
+verifies both binary checksums and ELF architecture before creating the ZIP.
+
+The LunarisOS OnePlus 11 profile follows the kernel source published in the
+LunarisOS OTA metadata. Its maintainer kernel uses `lineage-23.2`, while its
+matching external modules use the `los` branch; the resolver pins both branches
+independently and records both exact commits in the build provenance.
+
+Every package accepts both its custom-ROM codename and the device-specific
+stock board IDs published by the corresponding device tree. Generic SoC board
+names such as `taro`, `kalama`, and `pineapple` are deliberately excluded so a
+package cannot pass the check merely because another phone shares its chipset.
+The check remains enabled, and a rejected flash prints all four device values
+reported to AnyKernel so a genuinely missing regional alias can be diagnosed
+safely.
+
+## Build modes
+
+`Build OnePlus Kernel` offers three modes:
+
+- `Patch/config validation only` clones exact upstream revisions, applies the
+  selected KernelSU/KPM/SUSFS/NoMount/ZeroMount integration, verifies the final
+  config, and smoke-compiles the affected KPM, SUSFS, VFS, proc, reboot,
+  NoMount, and ZeroMount objects without spending time on a full kernel compile.
+- `Full build (artifact only)` builds and uploads a 14-day workflow artifact.
+  This is the default and does not create a permanent GitHub Release.
+- `Full build and publish release` first reserves an immutable tag at the
+  workflow commit, builds the same verified artifact, then a separate
+  least-privilege job publishes the release from that tag.
+
+Full builds preserve the upstream/vendor ABI-sensitive configuration instead of
+forcing debugging, symbol-export, or spinlock options. The pipeline also pins
+the kernel release suffix to the exact source commit (for example,
+`-g0d516eb3375f`) and verifies that release in the final `Image` banner. This
+keeps the kernel vermagic aligned with the ROM's vendor modules while the
+selected root preset changes only its required feature options.
+
+## crDroid 13 (Android 17)
+
+The existing crDroid profiles cover Nord CE4, OnePlus 11 / 12R / Ace 3, and
+OnePlus 12 on crDroid 13. Automatic branch selection follows the upstream
+default, currently `17.0`, for both the kernel and matching modules. Manual
+selection also offers `17.0`; retain `16.0` for crDroid 12 / Android 16.
+[crDroid 13 is based on Android 17](https://crdroid.net/blog/2026-09-28-crDroid-13-BETA-source-is-now-pushed/),
+so the ROM major version `13` must not be confused with the Android branch
+`13.0`.
+
+Android 17 branches select the pinned AOSP `clang-r584948` toolchain to match
+[crDroid's compiler default](https://github.com/crdroidandroid/android_build_soong/blob/17.0/cc/config/global.go).
+Flashable ZIPs enforce `supported.versions=17`. SUSFS and ZeroMount still use
+the devices' GKI kernel families: Android 14 / 5.15 for Nord CE4 and OnePlus
+11 / 12R / Ace 3, and Android 14 / 6.1 for OnePlus 12. The ROM Android version
+does not change those kernel-base mappings.
+
+The OnePlus 11 / 12R crDroid profile passes the common OPlus DTB flag and both
+the Salami and Aston device flags on every make invocation, matching the
+upstream device configurations for the shared kernel image.
+
+## Root integrations
+
+Available workflow presets:
+
+| Preset | Integration | Status |
+| --- | --- | --- |
+| `No root changes` | No root integration | Baseline |
+| `Official KernelSU` | Official KernelSU | Supported |
+| `KernelSU-Next` | KernelSU-Next | Supported |
+| `KernelSU-Next + SUSFS` | KernelSU-Next with SUSFS | Supported |
+| `KernelSU-Next + SUSFS + NoMount (experimental)` | KernelSU-Next with SUSFS and NoMount | Experimental |
+| `KernelSU-Next + SUSFS + ZeroMount (experimental)` | KernelSU-Next with SUSFS and ZeroMount | Experimental |
+| `KowSU` | KowSU | Supported |
+| `FinaSU (experimental)` | FinaSU, built into the kernel | Experimental |
+| `SukiSU Ultra + KPM (experimental)` | SukiSU Ultra with KPM | Experimental |
+| `SukiSU Ultra + SUSFS + KPM (experimental)` | SukiSU Ultra with SUSFS and KPM | Experimental |
+| `SukiSU Ultra + SUSFS + ZeroMount + KPM (experimental)` | SukiSU Ultra with SUSFS, ZeroMount, and KPM | Experimental |
+| `SukiSU Ultra + SUSFS + NoMount + KPM (experimental)` | SukiSU Ultra with SUSFS, NoMount, and KPM | Experimental |
+| `BakaSU` | BakaSU | Supported |
+| `BakaSU + SUSFS` | BakaSU with SUSFS | Supported |
+| `BakaSU + SUSFS + ZeroMount (experimental)` | BakaSU with SUSFS and ZeroMount | Experimental |
+| `BakaSU + SUSFS + NoMount (experimental)` | BakaSU with SUSFS and NoMount | Experimental |
+
+FinaSU is fetched from [`LyraVoid/FinaSU`](https://github.com/LyraVoid/FinaSU)
+at an exact commit resolved from `master`. Select `FinaSU (experimental)` in
+the root dropdown and use the matching FinaSU manager. This preset enables
+the driver's KPROBES/EXT4 dependencies, `CONFIG_KALLSYMS_ALL` for runtime data
+symbol lookup, and manager support. It pins the official
+v1.2.1 manager's signing certificate (`2d89b50a…5d448458`, 716 bytes) in the
+release signature slot, as required by FinaSU's upstream release workflow.
+Both post-build verification and packaging check that the final Image contains
+this certificate hash; `build-info.json` records it. A build using only the
+upstream default certificate can boot but reject FinaSU Manager as not installed.
+SUSFS, KPM, and
+the builder's NoMount/ZeroMount integrations are not enabled for this preset;
+FinaSU's own manager/userspace features remain managed by FinaSU. The optional
+preinit runner follows upstream's header availability check. Upstream-health
+includes driver object smoke builds on representative 5.10, 5.15, and 6.1
+profiles. Full kernel compilation and device boot still need validation before
+this preset can be considered stable.
+
+BakaSU (formerly ReSukiSU) is fetched from
+[`Baka-SU/BakaSU`](https://github.com/Baka-SU/BakaSU) at an exact commit (resolved from `main` without SUSFS, or pinned for SUSFS).
+Legacy ReSukiSU preset inputs remain accepted and resolve to the matching
+BakaSU integration; package names and provenance use `BakaSU`.
+
+Selecting `Build all 3 featured SUSFS variants (batch)` starts a three-entry
+matrix in which all three SUSFS integrations also include NoMount. Selecting
+`Build all 3 ZeroMount variants (batch)` instead builds `SukiSU Ultra + SUSFS +
+ZeroMount + KPM`, `BakaSU + SUSFS + ZeroMount`, and
+`KernelSU-Next + SUSFS + ZeroMount`.
+Each entry keeps its own package and diagnostics artifact; release mode publishes
+all three builds under the same immutable release tag.
+
+KPM is available only through the dedicated SukiSU Ultra presets because current
+BakaSU no longer supports it. The pipeline resolves SukiSU Ultra to an exact
+`main` commit for KPM-only builds, checks its KPM sources and Kbuild wiring,
+and enables `CONFIG_KPM`, `CONFIG_KALLSYMS`, and `CONFIG_KALLSYMS_ALL`.
+The SUSFS presets pin SukiSU Ultra to
+`7fbbb1f12e2410b69c8ebf958be84f165b8d0c93`, which passed a full
+SUSFS/NoMount/KPM build, and use the matching SUSFS v2.3.0 pins described
+below. Newer SukiSU `main` revisions changed the hook ABI
+and require a new compatibility patch before this pin can be advanced. The four-feature
+preset also resolves NoMount at an exact commit and enables `CONFIG_KEYS` and
+`CONFIG_NOMOUNT`. Validation mode compiles the KPM, SUSFS, VFS, and NoMount
+integration objects and checks their exported signatures; a full build repeats
+the signature checks against the final kernel artifacts. Both paths fail closed
+when expected wiring, config, objects, or symbols are missing. KPM resolver
+verification uses AOSP Clang's LTO-aware `llvm-nm` on the compiled resolver
+object instead of GNU `nm` on the aggregate LTO intermediate.
+Full KPM builds also inject the implementation into the final `Image` with
+SukiSU KernelPatch **0.13.9**. Both `kptools-linux` and `kpimg` are SHA-256
+pinned. The build requires a changed Image and `patched=true` from the image
+inspector; packaging checks the resulting Image hash against
+`kpm-image-proof.txt`. `CONFIG_KPM=y` and loader symbols alone only establish
+the hook stubs, not a working KPM implementation. Validation-only builds do
+not perform this final Image injection.
+
+BakaSU SUSFS presets pin `fa8311f632a215b5381ec644627c6198d1e8a13e`,
+which passed a full batch build on September 27. Its latest `main` suspends
+SUSFS builds pending upstream SELinux hook updates; this pin must be revisited
+when those updates land. BakaSU without SUSFS continues to follow `main`.
+BakaSU SUSFS presets also pin the matching SUSFS v2.3.0 revision for each GKI
+branch, using the same su-session ABI map as SukiSU Ultra. These pins include
+upstream fixes through September 15, 2026 for the enabled-features NULL
+dereference, CTIME spoof bit, and `super.c` declaration placement. The version
+string remains v2.3.0. Following the latest SUSFS branch with this older driver
+can introduce undefined preinit and SELinux
+hook symbols at the final kernel link.
+
+The pinned drivers originally exposed UAPI 4, which causes `Kernel update
+required` with BakaSU UAPI 5 and SukiSU UAPI 6 managers even when the kernel
+build succeeds. The pipeline now backports the actual interfaces:
+
+- BakaSU SUSFS: UAPI **5**, including the service-stage start/skip result and
+  reset for an emulated soft reboot, from upstream commit `8770c7e3`.
+- SukiSU SUSFS: UAPI **6**, including the same service-stage handling,
+  root-only batch symbol lookup, and `/metadata/vold/ksu/modules.rc` support,
+  from upstream commits `7ef2dbb7` and `3b607917`. The optional preinit runner
+  is disabled and its capability flag stays clear. The older KPM interfaces
+  are retained. The extension-hub ioctl also bridges KPM discovery/control and
+  SuSFS discovery to the pinned implementations. CPU spoof, umount paths, and
+  dynamic-manager hub operations remain unsupported by this bridge.
+
+Backports apply only to the exact tested driver commits; unknown patch drift
+fails the build. `build-info.json` and release notes record the resulting UAPI
+and patch SHA-256. The pinned BakaSU driver's full name can still contain
+ReSukiSU; its interface suffix should now be `/5`. SukiSU should show UAPI 6.
+Older downloaded ZIPs still contain UAPI 4 and must be replaced by a new build;
+updating the manager alone does not update an embedded kernel driver.
+Device boot, root grants, and module installation require device testing after
+flashing the device/ROM-matched package.
+
+If the home screen reports SuSFS v2.3.0 but the **Extension features** page
+reports no support, the running driver may have UAPI 6 without the extension
+hub bridge. For example, release `kernel-build-39906179867-1` contains this
+older backport and an unpatched KPM Image. Rebuild with the updated pipeline
+and flash the device/ROM-matched ZIP, then reboot. Updating the manager or
+reinstalling modules cannot add these kernel interfaces. Current managers
+also perform live KPM-version and SuSFS-version probes before displaying
+support; the bridge does not override those checks.
+
+Patch/config validation uses the runner's distribution Clang, LLD, and LLVM
+binutils; full builds use the selected pinned AOSP toolchain.
+
+The three ZeroMount presets fetch the version-matched VFS patch from a pinned
+Super-Builders commit, verify a per-GKI SHA-256, and apply it only after SUSFS.
+The pipeline verifies the `getname()` and directory-entry hooks, requires
+`CONFIG_ZEROMOUNT=y`, and checks the compiled driver. ZeroMount and NoMount are
+kept in separate presets because both implement VFS path redirection and are not
+safe to stack without device-specific runtime testing.
+
+SUSFS branches are selected from the SoC and Android/kernel branch. Known vendor
+include drift and the current SukiSU Ultra UTS-spoof, KPM resolver, kernel-umount,
+and allowlist drift are repaired only for explicitly recognized conflicts. The
+compatibility checks keep the KPM symbol resolver linked and initialized and
+preserve SukiSU's WebView zygote policy after the SUSFS patch. Unknown patch
+rejects fail closed and are included in diagnostics.
+
+The KernelSU-Next + SUSFS presets, including the NoMount and ZeroMount variants,
+resolve `pershoot/KernelSU-Next@dev-susfs` to an exact commit. The regular
+KernelSU-Next preset remains on the official
+`KernelSU-Next/KernelSU-Next@dev` branch. The compatibility branch is required
+because the SUSFS KernelSU-side patch does not apply to the current official
+development tree; the pipeline still takes the kernel-side SUSFS files and
+patch from `simonpunk/susfs4ksu` at an exact commit.
+
+SUSFS builds require upstream v2.3.0 or newer and explicitly verify the
+`SUS_MAP` and `OPEN_REDIRECT` features in the final config. The NoMount presets
+integrate the exact resolved `master` commit, enable `CONFIG_NOMOUNT=y`, and
+checks both source wiring and final kernel signatures. NoMount hooks VFS
+operations and is marked experimental by its upstream project, so it remains
+an explicit opt-in instead of changing existing build presets.
+SukiSU Ultra SUSFS presets also enable and verify
+`CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS`, which filters KernelSU and SUSFS
+names from `/proc/kallsyms`.
+
+## Quick start
+
+1. Open `Actions` -> `Build OnePlus Kernel` -> `Run workflow`.
+2. Select one device/source profile.
+3. Keep automatic branch and Clang selection unless testing a known branch.
+4. Select the root integration.
+5. Start with `Patch/config validation only` after an upstream update, then run
+   a full build when validation passes.
+6. Use release mode only for an artifact you intend to keep or distribute.
+
+Manually selected branch names are validated with Git before they are written
+to GitHub Actions environment files. Every kernel, modules, root implementation,
+SUSFS, NoMount, ZeroMount patches, and AnyKernel input are resolved to exact
+commits before cloning.
+
+The manual branch menu is shared across sources: selecting LineageOS does not
+make branches such as `seventeen` or crDroid's `17.0` valid for that repository.
+Use automatic branch selection, or select an existing `lineage-*` branch that
+matches the installed ROM. Missing branches fail immediately with a source URL
+and a selection hint, before optional root or patch dependencies are queried.
+
+## Build performance
+
+The full build passes `CC="ccache clang"` and host compiler wrappers directly
+on every `make` invocation so Kbuild cannot replace the ccache launcher.
+Build timestamps, user, and host metadata are deterministic for a given kernel
+commit, which improves repeat-build cache hits.
+
+The workflow also:
+
+- clones kernel and modules repositories in parallel at exact commits
+- caches the exact pinned AOSP Clang archive
+- restores a profile/branch/compiler-specific 3 GB compressed ccache
+- reports config, compile, total time, and ccache statistics in the job summary
+- reclaims unused hosted runner SDKs and creates up to 32 GB of swap for Full LTO
+- records memory, disk, and linker resource usage during full builds
+
+GitHub cache entries are an optimization only. A build remains able to download
+or regenerate every cached input.
+Each run saves a fresh ccache snapshot while restoring earlier matching runs,
+so an empty cache from an early failure cannot prevent later builds from saving
+their compiled objects.
+
+## Safe packaging and provenance
+
+Generated AnyKernel3 ZIPs enable `do.devicecheck=1` and contain only the
+device-specific codenames and stock board IDs assigned to the selected profile.
+Android version checking is also enabled when the selected branch identifies a
+known Android generation. The installer targets the current active `boot`
+partition by name, refuses to continue unless the resolved `boot_a`/`boot_b`
+path matches that slot, splits and rebuilds the boot image without unpacking
+its ramdisk, and replaces only the kernel Image. Slot detection uses the boot
+properties, `/proc/cmdline`, and `/proc/bootconfig`, supporting recoveries that
+do not publish `ro.boot.slot_suffix`. Missing or invalid slot metadata still
+aborts installation without writing a partition. This supports newer devices such as OnePlus 11,
+where the first-stage ramdisk lives in `init_boot` and `boot` legitimately has
+no ramdisk, while preserving a boot ramdisk when one is present. Upstream
+AnyKernel example-device paths and demo ramdisk edits are not included. KPM
+packages replace AnyKernel's legacy 32-bit ARM BusyBox and
+MagiskBoot with verified AArch64 builds. BusyBox comes from the exact SukiSU
+source revision used by the build; MagiskBoot comes from a pinned official
+Magisk APK with both archive and extracted-binary SHA-256 verification. On
+arm64-only SoCs such as the Snapdragon 8 Gen 3 in OnePlus 12, the installer
+also discards the manager app's incompatible ARM32 `mkbootfs` injection and
+uses BusyBox `cpio` instead. Other unused ARM32 AnyKernel partition utilities
+are removed, and packaging fails if any remaining native runtime tool is not
+ELF64/AArch64.
+
+Each full build produces `release-assets/` containing:
+
+- a device-checked AnyKernel3 ZIP
+- a uniquely named raw `Image`
+- `build-info.json` with all exact source commits, the KPM enabled state, and
+  the workflow run URL
+- `SHA256SUMS`
+- generated `release-notes.md`
+
+GitHub Actions uploads these release-ready files as one flat package artifact.
+Build logs and configuration are kept in a separate diagnostics artifact,
+along with `kpm-source-proof.txt` and `kpm-proof.txt` when KPM is selected (and
+equivalent SUSFS/NoMount proofs for those presets). The release job downloads
+only the package artifact and verifies its checksums before publishing.
+
+The same `build-info.json` is embedded in the flashable ZIP. Keep a known-good
+stock boot image available and never flash a package whose device check does
+not match the phone.
+
+## CI security and reliability
+
+The tag-reservation job has `contents: write` but checks out and executes no
+repository or external source. The build job keeps read-only repository
+permissions and does not persist checkout credentials, so external kernel
+Makefiles never run with release write credentials. After a successful build,
+the separate publication job receives `contents: write`, verifies the reserved
+tag and artifact checksums, and creates the Release. A failed build removes its
+unused reserved tag automatically.
+
+Network Git operations use bounded retries. Release creation and asset uploads
+are idempotent, time-limited, and retried, preventing a stalled upload from
+holding the build runner indefinitely.
+
+All third-party GitHub Actions are pinned to full commit hashes. AOSP Clang
+archive URLs are pinned to exact Gitiles commits, and changing the downloader
+invalidates the toolchain cache.
+The downloader validates gzip integrity, archive extraction, and required tools
+before installing the toolchain. Truncated HTTP-success responses trigger a
+fresh download, with at most five attempts; partial extractions cannot become
+the cached toolchain.
+
+## Validation and upstream health
+
+Pushes and pull requests run:
+
+- Bash syntax checks
+- ShellCheck at warning severity
+- offline tests for all twelve profile mappings, root mappings (including the
+  three ZeroMount variants), Clang selection, KPM configuration, SUSFS
+  selection/version floor, NoMount/ZeroMount selection and wiring,
+  Android version inference, and workflow option synchronization
+- actionlint for all workflow files
+
+`Check upstream health` runs every Monday and can also be started manually. It
+resolves exact commits for all twelve profiles, then runs a thirty-job
+smoke-test matrix: KernelSU-Next + SUSFS + NoMount, SukiSU Ultra + SUSFS +
+NoMount + KPM
+(including the crDroid OnePlus 12 / Android 6.1 vendor include drift),
+and BakaSU + SUSFS + NoMount are validated on representative SM7550 (including
+both CE4 source families), SM8450, SM8550 (including crDroid), and SM8650
+sources, with an additional
+baseline validation for the LunarisOS OnePlus 11 and crDroid OnePlus 12 sources.
+The SukiSU Ultra ZeroMount preset is validated across the representative
+5.10, 5.15, and 6.1 source families; the KernelSU-Next and BakaSU ZeroMount
+presets additionally run against the representative SM8550 LineageOS source.
+BakaSU ZeroMount also runs against the SM8550 crDroid source.
+
+## Important limitations
+
+- A successful build does not prove that a kernel is safe for every firmware,
+  region, or boot stack of the listed device.
+- Community sources are not official OnePlus sources.
+- Manual or unusual branches may disable Android version checking when their
+  version cannot be inferred safely.
+- This pipeline builds the raw GKI `Image`; it does not rebuild every vendor
+  module or replace device-specific firmware.
+- NoMount and ZeroMount modify VFS behavior and their upstreams label them
+  experimental. Test their opt-in presets on a recoverable device before
+  distributing them.
+- KPM dynamically patches kernel behavior at runtime. Treat all SukiSU Ultra
+  presets as experimental and test them only on a recoverable device.
+- Runtime performance tuning is intentionally left at upstream/vendor config
+  defaults. Options such as KASAN, LTO mode, scheduler changes, and compiler
+  optimization flags require device-specific boot, stability, power, and
+  benchmark testing before becoming defaults.

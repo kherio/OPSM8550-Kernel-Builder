@@ -1,0 +1,359 @@
+#!/usr/bin/env bash
+#
+# Resolve workflow inputs into an exact, reproducible build profile.
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/profile-data.sh
+. "${SCRIPT_DIR}/lib/profile-data.sh"
+# shellcheck source=lib/git-helpers.sh
+. "${SCRIPT_DIR}/lib/git-helpers.sh"
+
+: "${INPUT_BUILD_PROFILE:?}"
+: "${INPUT_BRANCH_MODE:?}"
+: "${INPUT_CLANG_CHOICE:?}"
+: "${INPUT_ROOT_SOLUTION:?}"
+: "${INPUT_BUILD_MODE:?}"
+: "${GITHUB_ENV:?}"
+: "${GITHUB_OUTPUT:?}"
+: "${GITHUB_STEP_SUMMARY:?}"
+
+INPUT_KERNEL_BRANCH="${INPUT_KERNEL_BRANCH:-}"
+INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module checks (default)}"
+
+resolve_build_profile "$INPUT_BUILD_PROFILE"
+resolve_root_solution "$INPUT_ROOT_SOLUTION"
+
+case "$INPUT_ROM_GKI_MODULE_COMPAT" in
+  "Strict GKI module checks (default)") ROM_GKI_MODULE_COMPAT=0 ;;
+  "Use existing ROM system_dlkm modules (experimental)")
+    if [[ "$PROFILE_ID" != sm8650-oneplus12-crdroid ]]; then
+      echo "::error::ROM GKI module compatibility mode is currently validated only for the OnePlus 12 crDroid profile."
+      exit 1
+    fi
+    ROM_GKI_MODULE_COMPAT=1
+    ;;
+  *)
+    echo "::error::Unknown ROM GKI module compatibility mode: $INPUT_ROM_GKI_MODULE_COMPAT"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_BUILD_MODE" in
+  "Full build (artifact only)"|"Full build and publish release"|"Patch/config validation only") ;;
+  *)
+    echo "::error::Unsupported build mode: $INPUT_BUILD_MODE"
+    exit 1
+    ;;
+esac
+
+if [[ "$SOURCE_LAYOUT" == "oneplus-official" ]]; then
+  DEFAULT_KERNEL_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_oneplus_${UPSTREAM_SOC}.git"
+  DEFAULT_MODULES_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_modules_and_devicetree_oneplus_${UPSTREAM_SOC}.git"
+  KERNEL_CLONE_DIR="${SOC}-kernel"
+  MODULES_CLONE_DIR="${SOC}-modules"
+else
+  DEFAULT_KERNEL_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_oneplus_${UPSTREAM_SOC}.git"
+  DEFAULT_MODULES_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_oneplus_${UPSTREAM_SOC}-modules.git"
+  KERNEL_CLONE_DIR="${SOC}"
+  # Vendor kernel symlinks point to the upstream repository stem, which can
+  # intentionally differ from the marketed SoC (Nord CE4: sm7550 -> sm8550).
+  MODULES_CLONE_DIR="${UPSTREAM_SOC}-modules"
+fi
+KERNEL_REPO="${KERNEL_REPO_OVERRIDE:-$DEFAULT_KERNEL_REPO}"
+MODULES_REPO="${MODULES_REPO_OVERRIDE:-$DEFAULT_MODULES_REPO}"
+
+if [[ "$INPUT_BRANCH_MODE" == "Use the recommended branch automatically" ]]; then
+  KERNEL_BRANCH="$(git_ls_remote_retry --symref "$KERNEL_REPO" HEAD \
+    | awk '/^ref:/ {sub("refs/heads/", "", $2); print $2; exit}')"
+  if [[ -z "$KERNEL_BRANCH" ]]; then
+    echo "::error::Could not detect the default branch from $KERNEL_REPO"
+    exit 1
+  fi
+else
+  KERNEL_BRANCH="$INPUT_KERNEL_BRANCH"
+  if [[ -z "$KERNEL_BRANCH" ]]; then
+    echo "::error::Please select a branch when using manual branch mode."
+    exit 1
+  fi
+  if ! git check-ref-format --branch "$KERNEL_BRANCH" >/dev/null 2>&1; then
+    echo "::error::Invalid Git branch name: $KERNEL_BRANCH"
+    exit 1
+  fi
+fi
+
+MODULES_BRANCH="${MODULES_BRANCH_OVERRIDE:-$KERNEL_BRANCH}"
+
+# Validate source branches before resolving optional root/patch dependencies.
+KERNEL_COMMIT="$(git_resolve_branch_commit "$KERNEL_REPO" "$KERNEL_BRANCH")"
+MODULES_COMMIT="$(git_resolve_branch_commit "$MODULES_REPO" "$MODULES_BRANCH")"
+
+resolve_clang_version "$INPUT_CLANG_CHOICE" "$KERNEL_BRANCH"
+infer_android_versions "$KERNEL_BRANCH"
+if [[ -z "$SUPPORTED_ANDROID_VERSIONS" ]]; then
+  echo "::warning::Android version could not be inferred from '$KERNEL_BRANCH'; package version checking will be disabled."
+fi
+
+KSU_REPO=""
+KSU_REF=""
+KSU_COMMIT=""
+case "$KSU_TYPE" in
+  None) ;;
+  Official-KernelSU)
+    KSU_REPO="https://github.com/tiann/KernelSU.git"
+    KSU_REF="main"
+    ;;
+  KernelSU-Next)
+    KSU_REPO="https://github.com/KernelSU-Next/KernelSU-Next.git"
+    KSU_REF="dev"
+    ;;
+  KernelSU-Next-with-susfs|KernelSU-Next-with-susfs-nomount|KernelSU-Next-with-susfs-zeromount)
+    # The official dev branch does not carry the KernelSU-side SUSFS hooks.
+    # This branch tracks it and provides the matching in-tree integration.
+    KSU_REPO="https://github.com/pershoot/KernelSU-Next.git"
+    KSU_REF="dev-susfs"
+    ;;
+  KowSU)
+    KSU_REPO="https://github.com/KOWX712/KernelSU.git"
+    KSU_REF="master"
+    ;;
+  FinaSU)
+    KSU_REPO="https://github.com/LyraVoid/FinaSU.git"
+    KSU_REF="master"
+    ;;
+  SukiSU-Ultra-with-KPM|SukiSU-Ultra-with-susfs-KPM|SukiSU-Ultra-with-susfs-nomount-KPM|SukiSU-Ultra-with-susfs-zeromount-KPM)
+    KSU_REPO="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"
+    KSU_REF="main"
+    if [[ "$KSU_TYPE" == *susfs* ]]; then
+      # The October main tree changed the hook ABI beyond our guarded SUSFS
+      # patches. Pin the revision that passed the full SUSFS/NoMount/KPM build.
+      KSU_REF="7fbbb1f12e2410b69c8ebf958be84f165b8d0c93"
+      KSU_COMMIT="$KSU_REF"
+    fi
+    ;;
+  BakaSU*)
+    KSU_REPO="https://github.com/Baka-SU/BakaSU.git"
+    KSU_REF="main"
+    if [[ "$KSU_TYPE" == *susfs* ]]; then
+      # Latest main suspends SUSFS builds until its SELinux hooks are updated.
+      # Retain the revision that passed the full three-variant build on Sep 27.
+      KSU_REF="fa8311f632a215b5381ec644627c6198d1e8a13e"
+      KSU_COMMIT="$KSU_REF"
+    fi
+    ;;
+esac
+
+if [[ -n "$KSU_REPO" && -z "$KSU_COMMIT" ]]; then
+  KSU_COMMIT="$(git_ls_remote_retry --exit-code "$KSU_REPO" "refs/heads/${KSU_REF}" \
+    | awk 'NR == 1 {print $1}')"
+  if [[ ! "$KSU_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "::error::Could not resolve $KSU_REPO branch '$KSU_REF' to a commit."
+    exit 1
+  fi
+fi
+
+SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"
+SUSFS_REF=""
+SUSFS_COMMIT=""
+SUSFS_PATCH_FILE=""
+SUSFS_MIN_VERSION=""
+if [[ "$KSU_TYPE" == *susfs* ]]; then
+  SUSFS_MIN_VERSION="2.3.0"
+  resolve_susfs_settings "$SOC" "$KERNEL_BRANCH"
+  case "$KSU_TYPE" in
+    SukiSU-Ultra-with-susfs-KPM|SukiSU-Ultra-with-susfs-nomount-KPM|SukiSU-Ultra-with-susfs-zeromount-KPM|BakaSU-with-susfs|BakaSU-with-susfs-nomount|BakaSU-with-susfs-zeromount)
+      SUSFS_COMMIT="$(su_session_compatible_susfs_commit "$SUSFS_REF")"
+      echo "::notice::Using su-session-compatible SUSFS v2.3.0 commit $SUSFS_COMMIT for $SUSFS_REF ($KSU_TYPE)."
+      ;;
+    *)
+      SUSFS_COMMIT="$(git_ls_remote_retry --exit-code "$SUSFS_REPO" "refs/heads/${SUSFS_REF}" \
+        | awk 'NR == 1 {print $1}')"
+      ;;
+  esac
+  if [[ ! "$SUSFS_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "::error::Could not resolve susfs branch '$SUSFS_REF' to a commit."
+    exit 1
+  fi
+fi
+
+ZEROMOUNT_REPO="https://github.com/troy896/Super-Builders.git"
+ZEROMOUNT_COMMIT=""
+ZEROMOUNT_GKI_TAG=""
+if [[ "$KSU_TYPE" == *zeromount* ]]; then
+  ZEROMOUNT_COMMIT="2978dcad87dc7055e2e4596c603313c553a9a4b4"
+  ZEROMOUNT_GKI_TAG="${SUSFS_REF#gki-}"
+  case "$ZEROMOUNT_GKI_TAG" in
+    android13-5.10|android13-5.15|android14-5.15|android14-6.1) ;;
+    *)
+      echo "::error::No ZeroMount patch mapping exists for SUSFS target '$SUSFS_REF'."
+      exit 1
+      ;;
+  esac
+fi
+
+NOMOUNT_REPO="https://github.com/maxsteeel/nomount.git"
+NOMOUNT_REF=""
+NOMOUNT_COMMIT=""
+if [[ "$KSU_TYPE" == *nomount* ]]; then
+  NOMOUNT_REF="master"
+  NOMOUNT_COMMIT="$(git_ls_remote_retry --exit-code "$NOMOUNT_REPO" "refs/heads/${NOMOUNT_REF}" \
+    | awk 'NR == 1 {print $1}')"
+  if [[ ! "$NOMOUNT_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "::error::Could not resolve NoMount branch '$NOMOUNT_REF' to a commit."
+    exit 1
+  fi
+fi
+
+# Kernel-SU/AnyKernel3 disappeared on 2026-09-15 and made every matrix entry
+# fail during profile resolution. Use the canonical upstream and pin the tested
+# revision so packaging does not change underneath otherwise identical builds.
+ANYKERNEL_REPO="https://github.com/osm0sis/AnyKernel3.git"
+ANYKERNEL_COMMIT="020dfeccf9d7e962a48400fc94d3e451df92eead"
+
+case "$KERNEL_SOURCE" in
+  OnePlusOSS)
+    [[ "$KERNEL_BRANCH" =~ ^oneplus[/_] ]] \
+      || echo "::warning::OnePlus official source usually uses oneplus/* branches; selected '$KERNEL_BRANCH'."
+    ;;
+  LineageOS|lineage-ovaltine-dev)
+    [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
+      || echo "::warning::Lineage-style source usually uses lineage-* branches; selected '$KERNEL_BRANCH'."
+    ;;
+  LunarisOS)
+    [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
+      || echo "::warning::LunarisOS OnePlus 11 source usually uses a lineage-* kernel branch; selected '$KERNEL_BRANCH'."
+    ;;
+  OnePlus12R-development)
+    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* ]] \
+      || echo "::warning::Unexpected OnePlus 12R development branch: '$KERNEL_BRANCH'."
+    ;;
+  OnePlus-Nord-CE4-development)
+    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* || "$KERNEL_BRANCH" == seventeen* ]] \
+      || echo "::warning::Unexpected OnePlus Nord CE4 development branch: '$KERNEL_BRANCH'."
+    ;;
+  crdroidandroid)
+    echo "Note: crDroid branch naming may differ from LineageOS."
+    ;;
+esac
+
+{
+  echo "PROFILE_ID=$PROFILE_ID"
+  echo "TARGET_NAME=$TARGET_NAME"
+  echo "DEVICE_CODENAMES=$DEVICE_CODENAMES"
+  echo "DEVICE_NAMES=$DEVICE_NAMES"
+  echo "SUPPORTED_ANDROID_VERSIONS=$SUPPORTED_ANDROID_VERSIONS"
+  echo "BUILD_MODE=$INPUT_BUILD_MODE"
+  echo "SOC=$SOC"
+  echo "UPSTREAM_SOC=$UPSTREAM_SOC"
+  echo "PLATFORM_SLUG=$PLATFORM_SLUG"
+  echo "PLATFORM_NAME=$PLATFORM_NAME"
+  echo "BUILD_CONFIGS=$BUILD_CONFIGS"
+  echo "KERNEL_MAKE_FLAGS=$KERNEL_MAKE_FLAGS"
+  echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
+  echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
+  echo "KERNEL_SOURCE=$KERNEL_SOURCE"
+  echo "SOURCE_NAME=$SOURCE_NAME"
+  echo "SOURCE_SLUG=$SOURCE_SLUG"
+  echo "KERNEL_REPO=$KERNEL_REPO"
+  echo "MODULES_REPO=$MODULES_REPO"
+  echo "KERNEL_CLONE_DIR=$KERNEL_CLONE_DIR"
+  echo "MODULES_CLONE_DIR=$MODULES_CLONE_DIR"
+  echo "OFFICIAL_BUILD_TARGET=$OFFICIAL_BUILD_TARGET"
+  echo "OFFICIAL_GKI_FRAGMENT=$OFFICIAL_GKI_FRAGMENT"
+  echo "KERNEL_BRANCH=$KERNEL_BRANCH"
+  echo "MODULES_BRANCH=$MODULES_BRANCH"
+  echo "KERNEL_COMMIT=$KERNEL_COMMIT"
+  echo "MODULES_COMMIT=$MODULES_COMMIT"
+  echo "CLANG_VERSION=$CLANG_VERSION"
+  echo "KSU_TYPE=$KSU_TYPE"
+  echo "KSU_REPO=$KSU_REPO"
+  echo "KSU_REF=$KSU_REF"
+  echo "KSU_COMMIT=$KSU_COMMIT"
+  echo "SUSFS_REPO=$SUSFS_REPO"
+  echo "SUSFS_REF=$SUSFS_REF"
+  echo "SUSFS_COMMIT=$SUSFS_COMMIT"
+  echo "SUSFS_PATCH_FILE=$SUSFS_PATCH_FILE"
+  echo "SUSFS_MIN_VERSION=$SUSFS_MIN_VERSION"
+  echo "ZEROMOUNT_REPO=$ZEROMOUNT_REPO"
+  echo "ZEROMOUNT_COMMIT=$ZEROMOUNT_COMMIT"
+  echo "ZEROMOUNT_GKI_TAG=$ZEROMOUNT_GKI_TAG"
+  echo "NOMOUNT_REPO=$NOMOUNT_REPO"
+  echo "NOMOUNT_REF=$NOMOUNT_REF"
+  echo "NOMOUNT_COMMIT=$NOMOUNT_COMMIT"
+  echo "ANYKERNEL_REPO=$ANYKERNEL_REPO"
+  echo "ANYKERNEL_COMMIT=$ANYKERNEL_COMMIT"
+} >> "$GITHUB_ENV"
+
+{
+  echo "profile_id=$PROFILE_ID"
+  echo "target_name=$TARGET_NAME"
+  echo "device_codenames=$DEVICE_CODENAMES"
+  echo "device_names=$DEVICE_NAMES"
+  echo "supported_android_versions=$SUPPORTED_ANDROID_VERSIONS"
+  echo "build_mode=$INPUT_BUILD_MODE"
+  echo "soc=$SOC"
+  echo "upstream_soc=$UPSTREAM_SOC"
+  echo "platform_slug=$PLATFORM_SLUG"
+  echo "platform_name=$PLATFORM_NAME"
+  echo "kernel_source=$KERNEL_SOURCE"
+  echo "source_name=$SOURCE_NAME"
+  echo "source_slug=$SOURCE_SLUG"
+  echo "source_layout=$SOURCE_LAYOUT"
+  echo "kernel_branch=$KERNEL_BRANCH"
+  echo "modules_branch=$MODULES_BRANCH"
+  echo "kernel_commit=$KERNEL_COMMIT"
+  echo "modules_commit=$MODULES_COMMIT"
+  echo "clang_version=$CLANG_VERSION"
+  echo "ksu_type=$KSU_TYPE"
+  echo "rom_gki_module_compat=$ROM_GKI_MODULE_COMPAT"
+  echo "ksu_commit=$KSU_COMMIT"
+  echo "susfs_ref=$SUSFS_REF"
+  echo "susfs_commit=$SUSFS_COMMIT"
+  echo "susfs_min_version=$SUSFS_MIN_VERSION"
+  echo "zeromount_commit=$ZEROMOUNT_COMMIT"
+  echo "zeromount_gki_tag=$ZEROMOUNT_GKI_TAG"
+  echo "nomount_ref=$NOMOUNT_REF"
+  echo "nomount_commit=$NOMOUNT_COMMIT"
+  echo "anykernel_commit=$ANYKERNEL_COMMIT"
+} >> "$GITHUB_OUTPUT"
+
+{
+  echo "### Build profile"
+  echo "- Target: $TARGET_NAME ($SOC)"
+  echo "- Device codenames: $DEVICE_CODENAMES"
+  echo "- Accepted device IDs: $DEVICE_NAMES"
+  echo "- Source: $SOURCE_NAME"
+  echo "- Branch: $KERNEL_BRANCH"
+  echo "- Kernel commit: \`${KERNEL_COMMIT}\`"
+  echo "- Modules branch: $MODULES_BRANCH"
+  echo "- Modules commit: \`${MODULES_COMMIT}\`"
+  echo "- Clang: $CLANG_VERSION"
+  if [[ -n "$KERNEL_MAKE_FLAGS" ]]; then
+    echo "- Device make flags: $KERNEL_MAKE_FLAGS"
+  fi
+  echo "- Root solution: $KSU_TYPE"
+  echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
+  echo "- Mode: $INPUT_BUILD_MODE"
+  if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then
+    echo "- Android package check: $SUPPORTED_ANDROID_VERSIONS"
+  else
+    echo "- Android package check: disabled (branch could not be inferred)"
+  fi
+  if [[ -n "$KSU_COMMIT" ]]; then
+    echo "- KernelSU commit: \`${KSU_COMMIT}\` ($KSU_REF)"
+  fi
+  if [[ -n "$SUSFS_REF" ]]; then
+    echo "- SUSFS: $SUSFS_REF (\`${SUSFS_COMMIT}\`, required >= v${SUSFS_MIN_VERSION})"
+  fi
+  if [[ -n "$NOMOUNT_REF" ]]; then
+    echo "- NoMount: $NOMOUNT_REF (\`${NOMOUNT_COMMIT}\`, experimental)"
+  fi
+  if [[ -n "$ZEROMOUNT_COMMIT" ]]; then
+    echo "- ZeroMount: $ZEROMOUNT_GKI_TAG (\`${ZEROMOUNT_COMMIT}\`, experimental)"
+  fi
+  if [[ "$KSU_TYPE" == *KPM* ]]; then
+    echo "- KPM: enabled (experimental)"
+  fi
+  echo "- AnyKernel3 commit: \`${ANYKERNEL_COMMIT}\`"
+} >> "$GITHUB_STEP_SUMMARY"

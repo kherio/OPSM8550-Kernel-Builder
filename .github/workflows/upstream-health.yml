@@ -1,0 +1,106 @@
+name: Check upstream health
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-all:
+    name: Resolve all profiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve exact upstream commits
+        run: bash scripts/check-upstreams.sh
+
+  patch-smoke:
+    name: ${{ matrix.integration }} smoke ${{ matrix.profile }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        integration:
+          - KernelSU-Next + SUSFS + NoMount (experimental)
+          - BakaSU + SUSFS + NoMount (experimental)
+          - SukiSU Ultra + SUSFS + NoMount + KPM (experimental)
+          - SukiSU Ultra + SUSFS + ZeroMount + KPM (experimental)
+        profile:
+          - SM7550 | OnePlus Nord CE4 | development
+          - SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)
+          - SM8450 | OnePlus 10T / Ace Pro | LineageOS community
+          - SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
+          - SM8550 | OnePlus 11 / 12R | crDroid
+          - SM8650 | OnePlus 12 | LineageOS (recommended)
+        include:
+          - integration: FinaSU (experimental)
+            profile: SM8450 | OnePlus 10T / Ace Pro | LineageOS community
+          - integration: FinaSU (experimental)
+            profile: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
+          - integration: FinaSU (experimental)
+            profile: SM8650 | OnePlus 12 | LineageOS (recommended)
+          - integration: KernelSU-Next + SUSFS + ZeroMount (experimental)
+            profile: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
+          - integration: BakaSU + SUSFS + ZeroMount (experimental)
+            profile: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
+          - integration: BakaSU + SUSFS + ZeroMount (experimental)
+            profile: SM8550 | OnePlus 11 / 12R | crDroid
+          - integration: No root changes
+            profile: SM8550 | OnePlus 11 | LunarisOS
+          - integration: No root changes
+            profile: SM8650 | OnePlus 12 | crDroid
+          - integration: SukiSU Ultra + SUSFS + NoMount + KPM (experimental)
+            profile: SM8650 | OnePlus 12 | crDroid
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve exact upstream commits
+        env:
+          INPUT_BUILD_PROFILE: ${{ matrix.profile }}
+          INPUT_BRANCH_MODE: Use the recommended branch automatically
+          INPUT_KERNEL_BRANCH: ""
+          INPUT_CLANG_CHOICE: Recommended (auto-select based on branch)
+          INPUT_ROOT_SOLUTION: ${{ matrix.integration }}
+          INPUT_BUILD_MODE: Patch/config validation only
+        run: bash scripts/resolve-profile.sh
+
+      - name: Clone exact source revisions
+        run: bash scripts/clone-sources.sh
+
+      - name: Install validation dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            clang \
+            dwarves \
+            flex \
+            libelf-dev \
+            libssl-dev \
+            lld \
+            llvm \
+            patch
+
+      - name: Apply integrations and validate config
+        run: bash scripts/compile-kernel.sh
