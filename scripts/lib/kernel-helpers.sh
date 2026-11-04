@@ -262,12 +262,19 @@ apply_variant_configs() {
     enable_ksu_common_configs "$config_file"
   fi
 
-  if [[ "$KSU_TYPE" == FinaSU ]]; then
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
     # Built-in FinaSU resolves data symbols and requires KALLSYMS_ALL.
-    # FinaSU's Kconfig requires KPROBES and built-in EXT4. Its SUSFS
-    # interface needs a separate kernel patch set, not our current backports.
+    # FinaSU's Kconfig requires KPROBES and built-in EXT4.
     enable_config_values "$config_file" CONFIG_KSU CONFIG_KPROBES CONFIG_EXT4_FS CONFIG_KALLSYMS CONFIG_KALLSYMS_ALL CONFIG_KSU_DYNAMIC_MANAGER
-    disable_config_values "$config_file" CONFIG_KSU_SUSFS CONFIG_KSU_DISABLE_MANAGER CONFIG_KSU_DISABLE_POLICY
+    disable_config_values "$config_file" CONFIG_KSU_DISABLE_MANAGER CONFIG_KSU_DISABLE_POLICY
+    if [[ "$KSU_TYPE" == FinaSU-with-susfs ]]; then
+      # SUSFS rides on the default Tracepoint backend (no Inline hook sites).
+      enable_config_values "$config_file" CONFIG_KSU_HOOK_TRACEPOINT
+      disable_config_values "$config_file" CONFIG_KSU_HOOK_SUSFS_INLINE
+    else
+      # Plain FinaSU: its SUSFS layer needs the kernel-side patch set.
+      disable_config_values "$config_file" CONFIG_KSU_SUSFS
+    fi
   fi
 
   if [[ "$KSU_TYPE" == *nomount* ]]; then

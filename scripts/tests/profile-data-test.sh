@@ -190,6 +190,10 @@ resolve_root_solution "FinaSU (experimental)"
 assert_eq FinaSU "$KSU_TYPE" "FinaSU root mapping"
 grep -Fxq '          - FinaSU (experimental)' "$WORKFLOW_FILE" \
   || fail "workflow is missing FinaSU"
+resolve_root_solution "FinaSU + SUSFS (experimental)"
+assert_eq FinaSU-with-susfs "$KSU_TYPE" "FinaSU SUSFS root mapping"
+grep -Fxq '          - FinaSU + SUSFS (experimental)' "$WORKFLOW_FILE" \
+  || fail "workflow is missing FinaSU + SUSFS"
 (
   # shellcheck source=../lib/ksu-setup.sh
   . "$KSU_SETUP_SCRIPT"
