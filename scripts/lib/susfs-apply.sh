@@ -402,6 +402,21 @@ EOF_COMPAT
 
 # Full susfs apply flow: clone susfs, copy patches, patch KernelSU tree,
 # apply the kernel-side patch with drift recovery.
+# FinaSU provides the SUSFS driver entry points itself, so the credential
+# helpers that the KernelSU-side patch normally consumes have no caller in
+# fs/susfs.c and trip -Werror=unused-function.
+patch_susfs_finasu_unused_helpers() {
+  local file="fs/susfs.c"
+  local name
+
+  [[ -f "$file" ]] || return 0
+  for name in susfs_switch_to_ksu_domain susfs_restore_creds; do
+    sed -i -E "/^static /s/([[:space:]*])${name}\(/\1__maybe_unused ${name}(/" "$file"
+    grep -Eq "__maybe_unused ${name}\(" "$file" || echo "[!] ${name} not found in ${file}; nothing to annotate."
+  done
+  echo "[+] FinaSU: marked SUSFS credential helpers __maybe_unused."
+}
+
 apply_susfs_full() {
   local susfs_ref="$1"
   local susfs_commit="$2"
@@ -488,7 +503,11 @@ apply_susfs_full() {
     fi
   fi
 
-  [[ "$KSU_TYPE" == FinaSU* ]] || patch_susfs_kernelsu_layout
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
+    patch_susfs_finasu_unused_helpers
+  else
+    patch_susfs_kernelsu_layout
+  fi
 
   # Export for downstream verification
   export KSU_KERNEL_DIR="$ksu_kernel_dir"
