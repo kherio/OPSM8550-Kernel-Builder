@@ -402,6 +402,21 @@ EOF_COMPAT
 
 # Full susfs apply flow: clone susfs, copy patches, patch KernelSU tree,
 # apply the kernel-side patch with drift recovery.
+# FinaSU provides the SUSFS driver entry points itself, so the credential
+# helpers that the KernelSU-side patch normally consumes have no caller in
+# fs/susfs.c and trip -Werror=unused-function.
+patch_susfs_finasu_unused_helpers() {
+  local file="fs/susfs.c"
+  local name
+
+  [[ -f "$file" ]] || return 0
+  for name in susfs_switch_to_ksu_domain susfs_restore_creds; do
+    sed -i -E "/^static /s/([[:space:]*])${name}\(/\1__maybe_unused ${name}(/" "$file"
+    grep -Eq "__maybe_unused ${name}\(" "$file" || echo "[!] ${name} not found in ${file}; nothing to annotate."
+  done
+  echo "[+] FinaSU: marked SUSFS credential helpers __maybe_unused."
+}
+
 apply_susfs_full() {
   local susfs_ref="$1"
   local susfs_commit="$2"
@@ -449,14 +464,21 @@ apply_susfs_full() {
     cp ./kernel_patches/include/linux/* ../include/linux/
   )
 
-  cp ./susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch "${ksu_repo_dir}/"
-  mkdir -p "${ksu_kernel_dir}/include/linux"
-  cp ./susfs/kernel_patches/include/linux/* "${ksu_kernel_dir}/include/linux/"
-  patch_kernelsu_for_susfs "${ksu_repo_dir}" "${ksu_kernel_dir}"
-  if [[ "$KSU_TYPE" == BakaSU* ]]; then
-    patch_bakasu_susfs_runtime_compat "${ksu_kernel_dir}"
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
+    # FinaSU already carries the KernelSU side of SUSFS (kernel/extension/susfs.c,
+    # SID helpers, SELinux hide hooks). Only the kernel-side patch is applied;
+    # 10_enable_susfs_for_ksu.patch must never touch the FinaSU tree.
+    echo "[+] FinaSU: skipping KernelSU-side SUSFS patch (built into FinaSU)."
+  else
+    cp ./susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch "${ksu_repo_dir}/"
+    mkdir -p "${ksu_kernel_dir}/include/linux"
+    cp ./susfs/kernel_patches/include/linux/* "${ksu_kernel_dir}/include/linux/"
+    patch_kernelsu_for_susfs "${ksu_repo_dir}" "${ksu_kernel_dir}"
+    if [[ "$KSU_TYPE" == BakaSU* ]]; then
+      patch_bakasu_susfs_runtime_compat "${ksu_kernel_dir}"
+    fi
+    patch_susfs_selinux_hide_compat "${ksu_kernel_dir}"
   fi
-  patch_susfs_selinux_hide_compat "${ksu_kernel_dir}"
 
   test -f include/linux/susfs_def.h || {
     echo "::error::susfs_def.h was not copied into include/linux from $susfs_ref"
@@ -464,7 +486,7 @@ apply_susfs_full() {
     exit 1
   }
 
-  test -f "${ksu_kernel_dir}/include/linux/susfs_def.h" || {
+  [[ "$KSU_TYPE" == FinaSU* ]] || test -f "${ksu_kernel_dir}/include/linux/susfs_def.h" || {
     echo "::error::susfs_def.h was not copied into ${ksu_kernel_dir}/include/linux from $susfs_ref"
     find "${ksu_kernel_dir}/include/linux" -maxdepth 1 -type f -name 'susfs*' -print || true
     exit 1
@@ -481,7 +503,11 @@ apply_susfs_full() {
     fi
   fi
 
-  patch_susfs_kernelsu_layout
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
+    patch_susfs_finasu_unused_helpers
+  else
+    patch_susfs_kernelsu_layout
+  fi
 
   # Export for downstream verification
   export KSU_KERNEL_DIR="$ksu_kernel_dir"
