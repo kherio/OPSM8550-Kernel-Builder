@@ -8,7 +8,7 @@ FINASU_MANAGER_CERT_SIZE=0x02cc
 FINASU_MANAGER_CERT_SHA256=2d89b50aaf1db013c2b6738f973f48b62ea21a3a8d7216bfec3521065d448458
 
 configure_finasu_manager() {
-  [[ "$KSU_TYPE" == FinaSU ]] || return 0
+  [[ "$KSU_TYPE" == FinaSU* ]] || return 0
 
   # Mirror upstream's release workflow. Kbuild selects slot 2 as the trusted
   # FinaSU identity only when it is explicitly marked as a release key.
