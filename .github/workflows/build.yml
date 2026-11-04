@@ -11,18 +11,10 @@ on:
         type: choice
         default: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
         options:
-          - SM7550 | OnePlus Nord CE4 | development
-          - SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)
-          - SM8450 | OnePlus 10 Pro | OnePlus official
-          - SM8450 | OnePlus 10T / Ace Pro | LineageOS community
           - SM8550 | OnePlus 11 | OnePlus official
           - SM8550 | OnePlus 11 | LunarisOS
           - SM8550 | OnePlus 11 / 12R | LineageOS (recommended)
           - SM8550 | OnePlus 11 / 12R | crDroid
-          - SM8550 | OnePlus 12R | development
-          - SM8650 | OnePlus 12 | OnePlus official
-          - SM8650 | OnePlus 12 | LineageOS (recommended)
-          - SM8650 | OnePlus 12 | crDroid
       branch_mode:
         description: Use the upstream default branch or select one manually
         required: true
@@ -38,26 +30,6 @@ on:
         default: "17.0"
         options:
           - "17.0"
-          - "16.0"
-          - "15.0"
-          - "14.0"
-          - "13.0"
-          - lineage-24.0
-          - lineage-23.2
-          - lineage-23.1
-          - lineage-23.0
-          - lineage-22.2
-          - lineage-22.1
-          - lineage-21
-          - lineage-20
-          - seventeen
-          - sixteen-qpr2
-          - sixteen-qpr1
-          - fifteen
-          - oneplus/sm8450_b_16.0_oneplus_10_pro
-          - oneplus/sm8550_b_16.0.0_oneplus_11
-          - oneplus/sm8550_b_16.0.0_oneplus_12r
-          - oneplus/sm8650_b_16.0.0_oneplus12
       clang_choice:
         description: Compiler preset; auto is safest for normal builds
         required: true
