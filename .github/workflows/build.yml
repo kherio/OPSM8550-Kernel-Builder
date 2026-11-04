@@ -61,6 +61,7 @@ on:
           - KernelSU-Next + SUSFS + ZeroMount (experimental)
           - KowSU
           - FinaSU (experimental)
+          - FinaSU + SUSFS (experimental)
           - SukiSU Ultra + KPM (experimental)
           - SukiSU Ultra + SUSFS + KPM (experimental)
           - SukiSU Ultra + SUSFS + ZeroMount + KPM (experimental)
@@ -86,6 +87,14 @@ on:
         options:
           - Strict GKI module checks (default)
           - Use existing ROM system_dlkm modules (experimental)
+      susfs_logging:
+        description: SUSFS builds only; keep the SUSFS kernel log (default) or disable it to avoid log writes
+        required: true
+        type: choice
+        default: Keep SUSFS logging (default)
+        options:
+          - Keep SUSFS logging (default)
+          - Disable SUSFS logging
 
 permissions:
   contents: read
@@ -162,6 +171,7 @@ jobs:
           INPUT_ROOT_SOLUTION: ${{ matrix.root_solution }}
           INPUT_BUILD_MODE: ${{ inputs.build_mode }}
           INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}
+          INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
         run: bash scripts/resolve-profile.sh
 
       - name: Set build metadata

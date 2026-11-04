@@ -72,7 +72,7 @@ if [[ "$ROM_GKI_MODULE_COMPAT" == 1 ]]; then
 fi
 ASSET_DIR="${GITHUB_WORKSPACE:-$(pwd)}/release-assets"
 KPM_ENABLED=false
-if [[ "$KSU_TYPE" == FinaSU ]]; then
+if [[ "$KSU_TYPE" == FinaSU* ]]; then
   verify_finasu_manager_binary "${SOC}/out/arch/arm64/boot/Image" "${SOC}/finasu-manager-proof.txt"
 fi
 if [[ "$KSU_TYPE" == *KPM* ]]; then
@@ -191,7 +191,7 @@ jq -n \
   --arg ksu_commit "$KSU_COMMIT" \
   --arg ksu_uapi_version "$KSU_UAPI_VERSION" \
   --arg ksu_uapi_patch_sha256 "$KSU_UAPI_PATCH_SHA256" \
-  --arg manager_certificate_sha256 "$([[ "$KSU_TYPE" == FinaSU ]] && echo "$FINASU_MANAGER_CERT_SHA256" || true)" \
+  --arg manager_certificate_sha256 "$([[ "$KSU_TYPE" == FinaSU* ]] && echo "$FINASU_MANAGER_CERT_SHA256" || true)" \
   --arg susfs_ref "$SUSFS_REF" \
   --arg susfs_commit "$SUSFS_COMMIT" \
   --arg susfs_version "$SUSFS_VERSION" \

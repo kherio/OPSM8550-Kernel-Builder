@@ -49,6 +49,7 @@ append_file_block() {
   echo "- Modules commit: \`${MODULES_COMMIT}\`"
   echo "- Device kernel make flags: ${KERNEL_MAKE_FLAGS:-none}"
   echo "- ROM GKI module compatibility: ${ROM_GKI_MODULE_COMPAT:-0}"
+  echo "- SUSFS logging: ${SUSFS_LOGGING:-1}"
   if [[ -n "${KSU_COMMIT:-}" ]]; then
     echo "- KernelSU repository: ${KSU_REPO:-unknown}"
     echo "- KernelSU ref: ${KSU_REF:-unknown}"
