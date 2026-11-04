@@ -39,6 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${KERNEL_COMMIT:?}"
 : "${BUILD_MODE:?}"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
+: "${SUSFS_LOGGING:=1}"
 
 BUILD_STARTED_AT="$(date +%s)"
 CONFIG_SECONDS=0
@@ -226,6 +227,11 @@ if [[ "$KSU_TYPE" == *susfs* ]]; then
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_SUS_MAP
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_OPEN_REDIRECT
   require_config_disabled out/.config CONFIG_KSU_MANUAL_HOOK
+  if [[ "$SUSFS_LOGGING" == 0 ]]; then
+    require_config_disabled out/.config CONFIG_KSU_SUSFS_ENABLE_LOG
+  else
+    require_config_enabled  out/.config CONFIG_KSU_SUSFS_ENABLE_LOG
+  fi
   if [[ "$KSU_TYPE" == SukiSU-Ultra-with-susfs* ]]; then
     require_config_enabled out/.config CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
   else

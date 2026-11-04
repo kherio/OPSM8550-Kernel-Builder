@@ -203,9 +203,13 @@ enable_susfs_configs() {
     CONFIG_KSU_SUSFS_SUS_KSTAT \
     CONFIG_KSU_SUSFS_SUS_MAP \
     CONFIG_KSU_SUSFS_SPOOF_UNAME \
-    CONFIG_KSU_SUSFS_ENABLE_LOG \
     CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
     CONFIG_KSU_SUSFS_OPEN_REDIRECT
+  if [[ "${SUSFS_LOGGING:-1}" == 0 ]]; then
+    disable_config_values "$config_file" CONFIG_KSU_SUSFS_ENABLE_LOG
+  else
+    enable_config_values "$config_file" CONFIG_KSU_SUSFS_ENABLE_LOG
+  fi
   if [[ "$KSU_TYPE" == SukiSU-Ultra-with-susfs* ]]; then
     enable_config_values "$config_file" CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
   else
