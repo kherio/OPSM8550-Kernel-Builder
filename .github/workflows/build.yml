@@ -96,6 +96,14 @@ on:
         options:
           - Keep SUSFS logging (default)
           - Disable SUSFS logging
+      tcp_congestion:
+        description: Default TCP congestion control; keep the stock one (default) or build BBR in as the default (experimental)
+        required: true
+        type: choice
+        default: Keep stock TCP congestion control (default)
+        options:
+          - Keep stock TCP congestion control (default)
+          - Enable BBR as default (experimental)
 
 permissions:
   contents: read
@@ -173,6 +181,7 @@ jobs:
           INPUT_BUILD_MODE: ${{ inputs.build_mode }}
           INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
+          INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
         run: bash scripts/resolve-profile.sh
 
       - name: Set build metadata

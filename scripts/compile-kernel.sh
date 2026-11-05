@@ -40,6 +40,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${BUILD_MODE:?}"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
+: "${TCP_BBR:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
 CONFIG_SECONDS=0
@@ -201,6 +202,16 @@ make "${MAKE_ARGS[@]}" gki_defconfig "${ACTIVE_CONFIG_ARRAY[@]}"
 apply_variant_configs out/.config
 apply_rom_gki_module_compat_config out/.config
 make "${MAKE_ARGS[@]}" olddefconfig
+
+if [[ "$TCP_BBR" == 1 ]]; then
+  require_config_enabled out/.config CONFIG_TCP_CONG_BBR
+  require_config_enabled out/.config CONFIG_NET_SCH_FQ
+  grep -Fqx 'CONFIG_DEFAULT_TCP_CONG="bbr"' out/.config || {
+    echo "::error::TCP BBR was requested but CONFIG_DEFAULT_TCP_CONG is not \"bbr\" in the final .config."
+    grep -E 'CONFIG_DEFAULT_(TCP_CONG|BBR|CUBIC|RENO)|CONFIG_TCP_CONG' out/.config || true
+    exit 1
+  }
+fi
 
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD

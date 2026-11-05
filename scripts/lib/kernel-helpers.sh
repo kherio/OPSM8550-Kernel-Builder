@@ -255,8 +255,20 @@ verify_kernel_release_identity() {
   }
 }
 
+# Builds BBR in and makes it the default congestion control. The default queue
+# discipline is left alone: BBR paces internally, and fq stays available.
+apply_tcp_bbr_config() {
+  local config_file="$1"
+
+  [[ "${TCP_BBR:-0}" == 1 ]] || return 0
+  enable_config_values "$config_file" CONFIG_TCP_CONG_ADVANCED CONFIG_TCP_CONG_BBR CONFIG_NET_SCH_FQ CONFIG_DEFAULT_BBR
+  disable_config_values "$config_file" CONFIG_DEFAULT_CUBIC CONFIG_DEFAULT_RENO
+}
+
 apply_variant_configs() {
   local config_file="$1"
+
+  apply_tcp_bbr_config "$config_file"
 
   if [[ "$KSU_TYPE" == *susfs* ]]; then
     enable_susfs_configs "$config_file"
