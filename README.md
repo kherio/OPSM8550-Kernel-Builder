@@ -133,6 +133,8 @@ Available workflow presets:
 | `KernelSU-Next + SUSFS + ZeroMount (experimental)` | KernelSU-Next with SUSFS and ZeroMount | Experimental |
 | `KowSU` | KowSU | Supported |
 | `FinaSU (experimental)` | FinaSU, built into the kernel | Experimental |
+| `FinaSU + SUSFS (experimental)` | FinaSU with SUSFS (Tracepoint hook backend) | Experimental |
+| `FinaSU + SUSFS + NoMount (experimental)` | FinaSU with SUSFS and FinaSU's NoMount VFS driver built in | Experimental |
 | `SukiSU Ultra + KPM (experimental)` | SukiSU Ultra with KPM | Experimental |
 | `SukiSU Ultra + SUSFS + KPM (experimental)` | SukiSU Ultra with SUSFS and KPM | Experimental |
 | `SukiSU Ultra + SUSFS + ZeroMount + KPM (experimental)` | SukiSU Ultra with SUSFS, ZeroMount, and KPM | Experimental |
@@ -152,13 +154,34 @@ release signature slot, as required by FinaSU's upstream release workflow.
 Both post-build verification and packaging check that the final Image contains
 this certificate hash; `build-info.json` records it. A build using only the
 upstream default certificate can boot but reject FinaSU Manager as not installed.
-SUSFS, KPM, and
-the builder's NoMount/ZeroMount integrations are not enabled for this preset;
-FinaSU's own manager/userspace features remain managed by FinaSU. The optional
+The plain
+`FinaSU (experimental)` preset has SUSFS, KPM, and the builder's
+NoMount/ZeroMount integrations disabled; FinaSU's own manager/userspace
+features remain managed by FinaSU. The optional
 preinit runner follows upstream's header availability check. Upstream-health
 includes driver object smoke builds on representative 5.10, 5.15, and 6.1
 profiles. Full kernel compilation and device boot still need validation before
 this preset can be considered stable.
+
+`FinaSU + SUSFS (experimental)` adds only the kernel-side SUSFS patch set
+(FinaSU already ships its own SUSFS layer, controlled through `ksud susfs`),
+keeps FinaSU's default Tracepoint hook backend (`CONFIG_KSU_HOOK_TRACEPOINT=y`,
+`CONFIG_KSU_HOOK_SUSFS_INLINE` off), and uses the pinned SUSFS v2.3.0 revision.
+The final config is checked for `SUS_MAP` and `OPEN_REDIRECT`.
+
+`FinaSU + SUSFS + NoMount (experimental)` additionally builds NoMount into the
+kernel (`CONFIG_NOMOUNT=y`, `CONFIG_KEYS=y`). Unlike the other NoMount presets it
+does not take upstream `master`: it wires in the copy of the NoMount driver
+vendored inside the pinned FinaSU checkout (`userspace/nomount/kernel/src`),
+because FinaSU's `ksud` only speaks the protocol version that copy implements.
+The build verifies the source wiring and the final config. To use it, open the
+FinaSU manager -> Settings -> Features -> Folk Mount, set the mode to
+`Built-in (VFS)`, and reboot; the NoMount page should then report the driver as
+Ready with all rules active. NoMount's default visibility is the opposite of
+Magic Mount's: every app sees injected files unless it is added to the NoMount
+exception list, so configure that list before switching modes. If a NoMount
+boot never completes, FinaSU falls back to its built-in mount engine on the
+next boot and records the reason in `/data/adb/ksu/log/mount.log`.
 
 BakaSU (formerly ReSukiSU) is fetched from
 [`Baka-SU/BakaSU`](https://github.com/Baka-SU/BakaSU) at an exact commit (resolved from `main` without SUSFS, or pinned for SUSFS).
@@ -275,6 +298,17 @@ an explicit opt-in instead of changing existing build presets.
 SukiSU Ultra SUSFS presets also enable and verify
 `CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS`, which filters KernelSU and SUSFS
 names from `/proc/kallsyms`.
+
+## Optional kernel features
+
+These workflow inputs are off by default, so existing presets build exactly as
+before. Each one is recorded in the run summary and in the diagnostics artifact.
+
+| Input | Options | Effect |
+| --- | --- | --- |
+| `susfs_logging` | `Keep SUSFS logging (default)` / `Disable SUSFS logging` | SUSFS builds only. The disabled option clears `CONFIG_KSU_SUSFS_ENABLE_LOG` and the build verifies it. |
+| `tcp_congestion` | `Keep stock TCP congestion control (default)` / `Enable BBR as default (experimental)` | Builds `CONFIG_TCP_CONG_BBR=y` and `CONFIG_NET_SCH_FQ=y` and makes BBR the default congestion control (`CONFIG_DEFAULT_TCP_CONG="bbr"`). The default queue discipline is not changed. The build fails if the final `.config` does not end up with BBR as the default. Check on the device with `cat /proc/sys/net/ipv4/tcp_congestion_control`. |
+| `root_hiding_fixes` | `Keep stock kernel code (default)` / `Apply ptrace + Unicode fixes (experimental)` | Applies two patches from [`WildKernels/kernel_patches`](https://github.com/WildKernels/kernel_patches), vendored in `scripts/patches/`: a ptrace message leak fix for kernels older than 5.16 (`gki_ptrace.patch`) and a Unicode normalisation path-bypass fix (`unicode_bypass_fix.patch`). Both target root-detection leaks. The build stops if either patch does not apply or is not present afterwards. |
 
 ## Quick start
 

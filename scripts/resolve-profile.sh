@@ -22,6 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INPUT_KERNEL_BRANCH="${INPUT_KERNEL_BRANCH:-}"
 INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module checks (default)}"
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
+INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
+INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
@@ -37,6 +39,24 @@ case "$INPUT_ROM_GKI_MODULE_COMPAT" in
     ;;
   *)
     echo "::error::Unknown ROM GKI module compatibility mode: $INPUT_ROM_GKI_MODULE_COMPAT"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_ROOT_HIDING_FIXES" in
+  "Keep stock kernel code (default)") ROOT_HIDING_FIXES=0 ;;
+  "Apply ptrace + Unicode fixes (experimental)") ROOT_HIDING_FIXES=1 ;;
+  *)
+    echo "::error::Unknown root hiding fixes mode: $INPUT_ROOT_HIDING_FIXES"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_TCP_CONGESTION" in
+  "Keep stock TCP congestion control (default)") TCP_BBR=0 ;;
+  "Enable BBR as default (experimental)") TCP_BBR=1 ;;
+  *)
+    echo "::error::Unknown TCP congestion mode: $INPUT_TCP_CONGESTION"
     exit 1
     ;;
 esac
@@ -128,7 +148,7 @@ case "$KSU_TYPE" in
     KSU_REPO="https://github.com/KOWX712/KernelSU.git"
     KSU_REF="master"
     ;;
-  FinaSU|FinaSU-with-susfs)
+  FinaSU|FinaSU-with-susfs|FinaSU-with-susfs-nomount)
     KSU_REPO="https://github.com/LyraVoid/FinaSU.git"
     KSU_REF="master"
     ;;
@@ -205,7 +225,13 @@ fi
 NOMOUNT_REPO="https://github.com/maxsteeel/nomount.git"
 NOMOUNT_REF=""
 NOMOUNT_COMMIT=""
-if [[ "$KSU_TYPE" == *nomount* ]]; then
+if [[ "$KSU_TYPE" == FinaSU*nomount* ]]; then
+  # FinaSU's ksud only speaks the NoMount protocol it vendors, so build the
+  # driver from the copy inside the pinned FinaSU checkout, not upstream master.
+  NOMOUNT_REPO="https://github.com/LyraVoid/FinaSU.git"
+  NOMOUNT_REF="vendored-in-FinaSU"
+  NOMOUNT_COMMIT="$KSU_COMMIT"
+elif [[ "$KSU_TYPE" == *nomount* ]]; then
   NOMOUNT_REF="master"
   NOMOUNT_COMMIT="$(git_ls_remote_retry --exit-code "$NOMOUNT_REPO" "refs/heads/${NOMOUNT_REF}" \
     | awk 'NR == 1 {print $1}')"
@@ -262,6 +288,8 @@ esac
   echo "KERNEL_MAKE_FLAGS=$KERNEL_MAKE_FLAGS"
   echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
+  echo "TCP_BBR=$TCP_BBR"
+  echo "ROOT_HIDING_FIXES=$ROOT_HIDING_FIXES"
   echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
   echo "KERNEL_SOURCE=$KERNEL_SOURCE"
   echo "SOURCE_NAME=$SOURCE_NAME"
@@ -346,6 +374,8 @@ esac
   echo "- Root solution: $KSU_TYPE"
   echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
+  echo "- TCP BBR default: $TCP_BBR"
+  echo "- Root hiding fixes (ptrace + Unicode): $ROOT_HIDING_FIXES"
   echo "- Mode: $INPUT_BUILD_MODE"
   if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then
     echo "- Android package check: $SUPPORTED_ANDROID_VERSIONS"
