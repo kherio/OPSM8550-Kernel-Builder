@@ -41,6 +41,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
+: "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
 CONFIG_SECONDS=0
@@ -182,6 +183,10 @@ if [[ "$KSU_TYPE" == *nomount* ]]; then
     install_nomount "$NOMOUNT_REPO" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
   fi
   verify_nomount_source_integration
+fi
+
+if [[ "$ROOT_HIDING_FIXES" == 1 ]]; then
+  apply_root_hiding_fixes "${SCRIPT_DIR}/patches"
 fi
 
 # Match the ROM kernel's CONFIG_LOCALVERSION_AUTO result without inheriting the

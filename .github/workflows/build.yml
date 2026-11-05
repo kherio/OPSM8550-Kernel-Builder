@@ -104,6 +104,14 @@ on:
         options:
           - Keep stock TCP congestion control (default)
           - Enable BBR as default (experimental)
+      root_hiding_fixes:
+        description: Kernel fixes that close root-detection leaks on 5.15 (ptrace message leak, Unicode path bypass); off by default
+        required: true
+        type: choice
+        default: Keep stock kernel code (default)
+        options:
+          - Keep stock kernel code (default)
+          - Apply ptrace + Unicode fixes (experimental)
 
 permissions:
   contents: read
@@ -182,6 +190,7 @@ jobs:
           INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
+          INPUT_ROOT_HIDING_FIXES: ${{ inputs.root_hiding_fixes }}
         run: bash scripts/resolve-profile.sh
 
       - name: Set build metadata
