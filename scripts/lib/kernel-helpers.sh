@@ -255,8 +255,20 @@ verify_kernel_release_identity() {
   }
 }
 
+# Builds BBR in and makes it the default congestion control. The default queue
+# discipline is left alone: BBR paces internally, and fq stays available.
+apply_tcp_bbr_config() {
+  local config_file="$1"
+
+  [[ "${TCP_BBR:-0}" == 1 ]] || return 0
+  enable_config_values "$config_file" CONFIG_TCP_CONG_ADVANCED CONFIG_TCP_CONG_BBR CONFIG_NET_SCH_FQ CONFIG_DEFAULT_BBR
+  disable_config_values "$config_file" CONFIG_DEFAULT_CUBIC CONFIG_DEFAULT_RENO
+}
+
 apply_variant_configs() {
   local config_file="$1"
+
+  apply_tcp_bbr_config "$config_file"
 
   if [[ "$KSU_TYPE" == *susfs* ]]; then
     enable_susfs_configs "$config_file"
@@ -271,7 +283,7 @@ apply_variant_configs() {
     # FinaSU's Kconfig requires KPROBES and built-in EXT4.
     enable_config_values "$config_file" CONFIG_KSU CONFIG_KPROBES CONFIG_EXT4_FS CONFIG_KALLSYMS CONFIG_KALLSYMS_ALL CONFIG_KSU_DYNAMIC_MANAGER
     disable_config_values "$config_file" CONFIG_KSU_DISABLE_MANAGER CONFIG_KSU_DISABLE_POLICY
-    if [[ "$KSU_TYPE" == FinaSU-with-susfs ]]; then
+    if [[ "$KSU_TYPE" == FinaSU-with-susfs* ]]; then
       # SUSFS rides on the default Tracepoint backend (no Inline hook sites).
       enable_config_values "$config_file" CONFIG_KSU_HOOK_TRACEPOINT
       disable_config_values "$config_file" CONFIG_KSU_HOOK_SUSFS_INLINE
@@ -315,4 +327,33 @@ require_config_disabled() {
     grep -n "${key}" "$config_file" || true
     exit 1
   fi
+}
+
+# Applies the ptrace message leak fix and the Unicode normalisation bypass fix
+# (both from WildKernels/kernel_patches, GPL-2.0, vendored in scripts/patches).
+# They target kernels older than 6.1 / 5.16 and fail the build if they do not apply.
+apply_root_hiding_fixes() {
+  local patch_dir="$1"
+  local patch_file
+
+  for patch_file in gki_ptrace.patch unicode_bypass_fix.patch; do
+    test -f "${patch_dir}/${patch_file}" || {
+      echo "::error::Root hiding patch ${patch_file} is missing from ${patch_dir}."
+      exit 1
+    }
+    patch -p1 --forward --no-backup-if-mismatch < "${patch_dir}/${patch_file}" || {
+      echo "::error::Root hiding patch ${patch_file} did not apply to this kernel source."
+      exit 1
+    }
+  done
+
+  grep -Fq 'void ptrace_notify(int exit_code, unsigned long message)' kernel/signal.c || {
+    echo "::error::ptrace fix is not present in kernel/signal.c after patching."
+    exit 1
+  }
+  grep -Fq 'Check if the decomposition result is empty' fs/unicode/utf8-norm.c || {
+    echo "::error::Unicode fix is not present in fs/unicode/utf8-norm.c after patching."
+    exit 1
+  }
+  echo "[+] Applied root hiding fixes (ptrace message leak, Unicode path bypass)."
 }

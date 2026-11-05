@@ -40,6 +40,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${BUILD_MODE:?}"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
+: "${TCP_BBR:=0}"
+: "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
 CONFIG_SECONDS=0
@@ -175,8 +177,16 @@ if [[ "$KSU_TYPE" == *nomount* ]]; then
   : "${NOMOUNT_REPO:?}"
   : "${NOMOUNT_REF:?}"
   : "${NOMOUNT_COMMIT:?}"
-  install_nomount "$NOMOUNT_REPO" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
+    install_nomount_vendored "${KSU_REPO_DIR:?}/userspace/nomount/kernel/src" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  else
+    install_nomount "$NOMOUNT_REPO" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  fi
   verify_nomount_source_integration
+fi
+
+if [[ "$ROOT_HIDING_FIXES" == 1 ]]; then
+  apply_root_hiding_fixes "${SCRIPT_DIR}/patches"
 fi
 
 # Match the ROM kernel's CONFIG_LOCALVERSION_AUTO result without inheriting the
@@ -197,6 +207,16 @@ make "${MAKE_ARGS[@]}" gki_defconfig "${ACTIVE_CONFIG_ARRAY[@]}"
 apply_variant_configs out/.config
 apply_rom_gki_module_compat_config out/.config
 make "${MAKE_ARGS[@]}" olddefconfig
+
+if [[ "$TCP_BBR" == 1 ]]; then
+  require_config_enabled out/.config CONFIG_TCP_CONG_BBR
+  require_config_enabled out/.config CONFIG_NET_SCH_FQ
+  grep -Fqx 'CONFIG_DEFAULT_TCP_CONG="bbr"' out/.config || {
+    echo "::error::TCP BBR was requested but CONFIG_DEFAULT_TCP_CONG is not \"bbr\" in the final .config."
+    grep -E 'CONFIG_DEFAULT_(TCP_CONG|BBR|CUBIC|RENO)|CONFIG_TCP_CONG' out/.config || true
+    exit 1
+  }
+fi
 
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
@@ -229,7 +249,7 @@ if [[ "$KSU_TYPE" == *susfs* ]]; then
   require_config_enabled  out/.config CONFIG_KSU_SUSFS
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_SUS_MAP
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_OPEN_REDIRECT
-  if [[ "$KSU_TYPE" == FinaSU-with-susfs ]]; then
+  if [[ "$KSU_TYPE" == FinaSU-with-susfs* ]]; then
     require_config_enabled  out/.config CONFIG_KSU_HOOK_TRACEPOINT
     require_config_disabled out/.config CONFIG_KSU_HOOK_SUSFS_INLINE
   else
