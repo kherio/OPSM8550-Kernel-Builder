@@ -328,3 +328,32 @@ require_config_disabled() {
     exit 1
   fi
 }
+
+# Applies the ptrace message leak fix and the Unicode normalisation bypass fix
+# (both from WildKernels/kernel_patches, GPL-2.0, vendored in scripts/patches).
+# They target kernels older than 6.1 / 5.16 and fail the build if they do not apply.
+apply_root_hiding_fixes() {
+  local patch_dir="$1"
+  local patch_file
+
+  for patch_file in gki_ptrace.patch unicode_bypass_fix.patch; do
+    test -f "${patch_dir}/${patch_file}" || {
+      echo "::error::Root hiding patch ${patch_file} is missing from ${patch_dir}."
+      exit 1
+    }
+    patch -p1 --forward --no-backup-if-mismatch < "${patch_dir}/${patch_file}" || {
+      echo "::error::Root hiding patch ${patch_file} did not apply to this kernel source."
+      exit 1
+    }
+  done
+
+  grep -Fq 'void ptrace_notify(int exit_code, unsigned long message)' kernel/signal.c || {
+    echo "::error::ptrace fix is not present in kernel/signal.c after patching."
+    exit 1
+  }
+  grep -Fq 'Check if the decomposition result is empty' fs/unicode/utf8-norm.c || {
+    echo "::error::Unicode fix is not present in fs/unicode/utf8-norm.c after patching."
+    exit 1
+  }
+  echo "[+] Applied root hiding fixes (ptrace message leak, Unicode path bypass)."
+}

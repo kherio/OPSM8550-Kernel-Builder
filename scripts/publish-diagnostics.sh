@@ -51,6 +51,7 @@ append_file_block() {
   echo "- ROM GKI module compatibility: ${ROM_GKI_MODULE_COMPAT:-0}"
   echo "- SUSFS logging: ${SUSFS_LOGGING:-1}"
   echo "- TCP BBR default: ${TCP_BBR:-0}"
+  echo "- Root hiding fixes: ${ROOT_HIDING_FIXES:-0}"
   if [[ -n "${KSU_COMMIT:-}" ]]; then
     echo "- KernelSU repository: ${KSU_REPO:-unknown}"
     echo "- KernelSU ref: ${KSU_REF:-unknown}"
