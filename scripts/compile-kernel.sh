@@ -175,7 +175,11 @@ if [[ "$KSU_TYPE" == *nomount* ]]; then
   : "${NOMOUNT_REPO:?}"
   : "${NOMOUNT_REF:?}"
   : "${NOMOUNT_COMMIT:?}"
-  install_nomount "$NOMOUNT_REPO" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  if [[ "$KSU_TYPE" == FinaSU* ]]; then
+    install_nomount_vendored "${KSU_REPO_DIR:?}/userspace/nomount/kernel/src" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  else
+    install_nomount "$NOMOUNT_REPO" "$NOMOUNT_REF" "$NOMOUNT_COMMIT"
+  fi
   verify_nomount_source_integration
 fi
 
@@ -229,7 +233,7 @@ if [[ "$KSU_TYPE" == *susfs* ]]; then
   require_config_enabled  out/.config CONFIG_KSU_SUSFS
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_SUS_MAP
   require_config_enabled  out/.config CONFIG_KSU_SUSFS_OPEN_REDIRECT
-  if [[ "$KSU_TYPE" == FinaSU-with-susfs ]]; then
+  if [[ "$KSU_TYPE" == FinaSU-with-susfs* ]]; then
     require_config_enabled  out/.config CONFIG_KSU_HOOK_TRACEPOINT
     require_config_disabled out/.config CONFIG_KSU_HOOK_SUSFS_INLINE
   else

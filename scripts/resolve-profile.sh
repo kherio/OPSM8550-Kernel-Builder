@@ -128,7 +128,7 @@ case "$KSU_TYPE" in
     KSU_REPO="https://github.com/KOWX712/KernelSU.git"
     KSU_REF="master"
     ;;
-  FinaSU|FinaSU-with-susfs)
+  FinaSU|FinaSU-with-susfs|FinaSU-with-susfs-nomount)
     KSU_REPO="https://github.com/LyraVoid/FinaSU.git"
     KSU_REF="master"
     ;;
@@ -205,7 +205,13 @@ fi
 NOMOUNT_REPO="https://github.com/maxsteeel/nomount.git"
 NOMOUNT_REF=""
 NOMOUNT_COMMIT=""
-if [[ "$KSU_TYPE" == *nomount* ]]; then
+if [[ "$KSU_TYPE" == FinaSU*nomount* ]]; then
+  # FinaSU's ksud only speaks the NoMount protocol it vendors, so build the
+  # driver from the copy inside the pinned FinaSU checkout, not upstream master.
+  NOMOUNT_REPO="https://github.com/LyraVoid/FinaSU.git"
+  NOMOUNT_REF="vendored-in-FinaSU"
+  NOMOUNT_COMMIT="$KSU_COMMIT"
+elif [[ "$KSU_TYPE" == *nomount* ]]; then
   NOMOUNT_REF="master"
   NOMOUNT_COMMIT="$(git_ls_remote_retry --exit-code "$NOMOUNT_REPO" "refs/heads/${NOMOUNT_REF}" \
     | awk 'NR == 1 {print $1}')"

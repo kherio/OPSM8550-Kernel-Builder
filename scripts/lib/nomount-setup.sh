@@ -122,3 +122,63 @@ install_nomount() {
 
   echo "[+] Integrated NoMount v${NOMOUNT_VERSION} from $commit ($ref)."
 }
+
+# FinaSU vendors the exact NoMount driver its ksud talks to. Wire that copy into
+# the kernel tree the same way install_nomount does, without cloning upstream.
+install_nomount_vendored() {
+  local src_dir="$1"
+  local ref="$2"
+  local commit="$3"
+  local fs_dir
+  local kconfig_source
+  local version
+
+  if [[ -d fs ]]; then
+    fs_dir="fs"
+  elif [[ -d common/fs ]]; then
+    fs_dir="common/fs"
+  else
+    echo "::error::NoMount requires an fs/ or common/fs/ directory in the kernel tree."
+    exit 1
+  fi
+
+  for f in nomount.c nomount.h Kconfig Makefile; do
+    test -f "$src_dir/$f" || {
+      echo "::error::The pinned FinaSU checkout has no vendored NoMount driver ($src_dir/$f)."
+      exit 1
+    }
+  done
+
+  rm -rf "$fs_dir/nomount"
+  ln -s "$(realpath --relative-to="$fs_dir" "$src_dir")" "$fs_dir/nomount"
+  ensure_line_in_file "$fs_dir/Makefile" 'obj-$(CONFIG_NOMOUNT) += nomount/'
+  kconfig_source="source \"${fs_dir}/nomount/Kconfig\""
+  insert_line_before_last_match "$fs_dir/Kconfig" "endmenu" "$kconfig_source" || {
+    echo "::error::Could not add NoMount Kconfig to $fs_dir/Kconfig."
+    exit 1
+  }
+
+  if ! version="$(detect_nomount_version "$src_dir")"; then
+    echo "::error::Could not detect the integrated NoMount version."
+    exit 1
+  fi
+
+  NOMOUNT_VERSION="$version"
+  NOMOUNT_FS_DIR="$fs_dir"
+  export NOMOUNT_VERSION NOMOUNT_FS_DIR
+  {
+    echo "NOMOUNT_VERSION=$NOMOUNT_VERSION"
+    echo "NOMOUNT_FS_DIR=$NOMOUNT_FS_DIR"
+  } >> "${GITHUB_ENV:-/dev/null}"
+
+  {
+    echo "nomount_ref=$ref"
+    echo "nomount_commit=$commit"
+    echo "nomount_version=$NOMOUNT_VERSION"
+    echo "nomount_fs_dir=$fs_dir"
+    grep -Fn 'obj-$(CONFIG_NOMOUNT) += nomount/' "$fs_dir/Makefile"
+    grep -Fn "$kconfig_source" "$fs_dir/Kconfig"
+  } | tee nomount-source-proof.txt
+
+  echo "[+] Integrated FinaSU-vendored NoMount v${NOMOUNT_VERSION} (FinaSU $commit)."
+}

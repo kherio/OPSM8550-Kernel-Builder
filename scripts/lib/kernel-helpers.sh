@@ -271,7 +271,7 @@ apply_variant_configs() {
     # FinaSU's Kconfig requires KPROBES and built-in EXT4.
     enable_config_values "$config_file" CONFIG_KSU CONFIG_KPROBES CONFIG_EXT4_FS CONFIG_KALLSYMS CONFIG_KALLSYMS_ALL CONFIG_KSU_DYNAMIC_MANAGER
     disable_config_values "$config_file" CONFIG_KSU_DISABLE_MANAGER CONFIG_KSU_DISABLE_POLICY
-    if [[ "$KSU_TYPE" == FinaSU-with-susfs ]]; then
+    if [[ "$KSU_TYPE" == FinaSU-with-susfs* ]]; then
       # SUSFS rides on the default Tracepoint backend (no Inline hook sites).
       enable_config_values "$config_file" CONFIG_KSU_HOOK_TRACEPOINT
       disable_config_values "$config_file" CONFIG_KSU_HOOK_SUSFS_INLINE
