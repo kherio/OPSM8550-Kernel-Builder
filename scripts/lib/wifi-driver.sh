@@ -69,6 +69,7 @@ build_rtl88x2bu_module() {
   local ko
   local vermagic
   local signed=no
+  local wifi_errors
 
   grep -q '^CONFIG_MODULES=y$' out/.config || { echo "::error::CONFIG_MODULES is off."; return 1; }
   grep -q '^CONFIG_CFG80211=m$' out/.config || {
@@ -85,7 +86,15 @@ build_rtl88x2bu_module() {
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
   make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m modules 2>&1 | tee -a wifi-modules-build.log
-  [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
+  if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
+    wifi_errors="$(grep -E ' error:|undefined|No rule to make target|fatal error:|\*\*\* ' wifi-modules-build.log | grep -v 'make modules' | tail -n 10 | cut -c1-320 || true)"
+    [[ -n "$wifi_errors" ]] || wifi_errors="$(tail -n 10 wifi-modules-build.log | cut -c1-320)"
+    wifi_errors="${wifi_errors//'%'/'%25'}"
+    wifi_errors="${wifi_errors//$'\r'/'%0D'}"
+    wifi_errors="${wifi_errors//$'\n'/'%0A'}"
+    echo "::error title=RTL88x2BU module errors::${wifi_errors}"
+    return 1
+  fi
 
   # The driver Makefile only exports CONFIG_RTL8822BU=m in its standalone branch,
   # so it is passed explicitly above; without it kbuild builds nothing.
