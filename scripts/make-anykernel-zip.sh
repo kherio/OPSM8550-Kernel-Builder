@@ -70,6 +70,9 @@ ZIP_NAME="${PROFILE_ID}_${KSU_TYPE}_${SHORT_KERNEL_COMMIT}_${BUILD_TIMESTAMP}"
 if [[ "$ROM_GKI_MODULE_COMPAT" == 1 ]]; then
   ZIP_NAME="${ZIP_NAME}_rom-gki-compat"
 fi
+if [[ "${NETHUNTER:-0}" == 1 ]]; then
+  ZIP_NAME="${ZIP_NAME}_nethunter"
+fi
 ASSET_DIR="${GITHUB_WORKSPACE:-$(pwd)}/release-assets"
 KPM_ENABLED=false
 if [[ "$KSU_TYPE" == FinaSU* ]]; then
