@@ -469,6 +469,10 @@ apply_susfs_full() {
     # SID helpers, SELinux hide hooks). Only the kernel-side patch is applied;
     # 10_enable_susfs_for_ksu.patch must never touch the FinaSU tree.
     echo "[+] FinaSU: skipping KernelSU-side SUSFS patch (built into FinaSU)."
+    # The kernel-side SUSFS patch hooks security/selinux with fake_state, which
+    # FinaSU's own selinux_hide.c does not define; without it vmlinux fails to
+    # link with "undefined symbol: fake_state". Add only the missing symbol.
+    patch_susfs_selinux_hide_compat "${ksu_kernel_dir}"
   else
     cp ./susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch "${ksu_repo_dir}/"
     mkdir -p "${ksu_kernel_dir}/include/linux"
