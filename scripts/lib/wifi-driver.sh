@@ -84,11 +84,16 @@ build_rtl88x2bu_module() {
   make -j"$(nproc)" "${MAKE_ARGS[@]}" modules 2>&1 | tee wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m modules 2>&1 | tee -a wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
 
+  # The driver Makefile only exports CONFIG_RTL8822BU=m in its standalone branch,
+  # so it is passed explicitly above; without it kbuild builds nothing.
   ko="$src/${RTL88X2BU_MODULE_NAME}.ko"
-  test -f "$ko" || { echo "::error::${ko} was not produced."; return 1; }
+  if [[ ! -f "$ko" ]]; then
+    echo "::error::${ko} was not produced. Built: $(find "$src" -name '*.ko' | head -n 3 | tr '\n' ' ')"
+    return 1
+  fi
   llvm-strip --strip-debug "$ko"
   sign_module_with_kernel_key "$ko" && signed=yes
 
