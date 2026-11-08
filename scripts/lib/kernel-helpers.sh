@@ -265,10 +265,82 @@ apply_tcp_bbr_config() {
   disable_config_values "$config_file" CONFIG_DEFAULT_CUBIC CONFIG_DEFAULT_RENO
 }
 
+# NetHunter support: USB gadget functions the stock config lacks (RNDIS, OBEX,
+# ECM subset) plus leaf drivers for USB serial, Bluetooth, Ethernet, NFC, CAN
+# and RTL-SDR adapters. Core options must survive olddefconfig; optional ones
+# are reported when Kconfig drops them. cfg80211/mac80211 are modules on these
+# kernels and are deliberately left alone, as are options that change core
+# struct layouts (SYSVIPC, netfilter): they would break the ROM's module CRCs.
+nethunter_fragment_keys() {
+  local fragment="$1"
+
+  [[ -f "$fragment" ]] || {
+    echo "::error::Missing NetHunter config fragment: ${fragment}" >&2
+    return 1
+  }
+  sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' -e 's/=y[[:space:]]*$//' "$fragment"
+}
+
+apply_nethunter_config() {
+  local config_file="$1"
+  local config_dir="${NETHUNTER_CONFIG_DIR:-}"
+  local key
+
+  [[ "${NETHUNTER:-0}" == 1 ]] || return 0
+  [[ -d "$config_dir" ]] || {
+    echo "::error::NETHUNTER_CONFIG_DIR is not set to a directory." >&2
+    return 1
+  }
+  nethunter_fragment_keys "${config_dir}/nethunter-core.config" > /dev/null
+  nethunter_fragment_keys "${config_dir}/nethunter-optional.config" > /dev/null
+  while IFS= read -r key; do
+    enable_config_values "$config_file" "$key"
+  done < <(nethunter_fragment_keys "${config_dir}/nethunter-core.config"; nethunter_fragment_keys "${config_dir}/nethunter-optional.config")
+}
+
+verify_nethunter_config() {
+  local config_file="$1"
+  local proof_file="$2"
+  local config_dir="${NETHUNTER_CONFIG_DIR:-}"
+  local key
+  local dropped=""
+
+  [[ "${NETHUNTER:-0}" == 1 ]] || return 0
+
+  {
+    echo "NetHunter kernel options in the final .config"
+    echo "[core: required]"
+  } > "$proof_file"
+  while IFS= read -r key; do
+    require_config_enabled "$config_file" "$key"
+    echo "kept ${key}" >> "$proof_file"
+  done < <(nethunter_fragment_keys "${config_dir}/nethunter-core.config")
+
+  echo "[optional: best effort]" >> "$proof_file"
+  while IFS= read -r key; do
+    if grep -q "^${key}=y$" "$config_file"; then
+      echo "kept ${key}" >> "$proof_file"
+    else
+      echo "dropped ${key}" >> "$proof_file"
+      dropped="${dropped} ${key}"
+    fi
+  done < <(nethunter_fragment_keys "${config_dir}/nethunter-optional.config")
+
+  {
+    echo "[left untouched on purpose]"
+    grep -E '^(CONFIG_CFG80211|CONFIG_MAC80211|CONFIG_SYSVIPC|CONFIG_USB_CONFIGFS_F_HID)=' "$config_file" || true
+  } >> "$proof_file"
+
+  if [[ -n "$dropped" ]]; then
+    echo "::warning::NetHunter optional options dropped by Kconfig:${dropped}"
+  fi
+}
+
 apply_variant_configs() {
   local config_file="$1"
 
   apply_tcp_bbr_config "$config_file"
+  apply_nethunter_config "$config_file"
 
   if [[ "$KSU_TYPE" == *susfs* ]]; then
     enable_susfs_configs "$config_file"

@@ -24,6 +24,7 @@ INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module ch
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
+INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
@@ -57,6 +58,15 @@ case "$INPUT_TCP_CONGESTION" in
   "Enable BBR as default (experimental)") TCP_BBR=1 ;;
   *)
     echo "::error::Unknown TCP congestion mode: $INPUT_TCP_CONGESTION"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_NETHUNTER" in
+  "Keep stock kernel config (default)") NETHUNTER=0 ;;
+  "Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)") NETHUNTER=1 ;;
+  *)
+    echo "::error::Unknown NetHunter mode: $INPUT_NETHUNTER"
     exit 1
     ;;
 esac
@@ -289,6 +299,7 @@ esac
   echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
+  echo "NETHUNTER=$NETHUNTER"
   echo "ROOT_HIDING_FIXES=$ROOT_HIDING_FIXES"
   echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
   echo "KERNEL_SOURCE=$KERNEL_SOURCE"
@@ -375,6 +386,7 @@ esac
   echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
+  echo "- NetHunter options: $NETHUNTER"
   echo "- Root hiding fixes (ptrace + Unicode): $ROOT_HIDING_FIXES"
   echo "- Mode: $INPUT_BUILD_MODE"
   if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then

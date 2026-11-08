@@ -309,6 +309,16 @@ before. Each one is recorded in the run summary and in the diagnostics artifact.
 | `susfs_logging` | `Keep SUSFS logging (default)` / `Disable SUSFS logging` | SUSFS builds only. The disabled option clears `CONFIG_KSU_SUSFS_ENABLE_LOG` and the build verifies it. |
 | `tcp_congestion` | `Keep stock TCP congestion control (default)` / `Enable BBR as default (experimental)` | Builds `CONFIG_TCP_CONG_BBR=y` and `CONFIG_NET_SCH_FQ=y` and makes BBR the default congestion control (`CONFIG_DEFAULT_TCP_CONG="bbr"`). The default queue discipline is not changed. The build fails if the final `.config` does not end up with BBR as the default. Check on the device with `cat /proc/sys/net/ipv4/tcp_congestion_control`. |
 | `root_hiding_fixes` | `Keep stock kernel code (default)` / `Apply ptrace + Unicode fixes (experimental)` | Applies two patches from [`WildKernels/kernel_patches`](https://github.com/WildKernels/kernel_patches), vendored in `scripts/patches/`: a ptrace message leak fix for kernels older than 5.16 (`gki_ptrace.patch`) and a Unicode normalisation path-bypass fix (`unicode_bypass_fix.patch`). Both target root-detection leaks. The build stops if either patch does not apply or is not present afterwards. |
+| `nethunter`         | `Keep stock kernel config (default)` / `Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)` | Builds in the options listed in `scripts/configs/nethunter-core.config` (USB gadget RNDIS/OBEX/ECM subset, USB serial, USB Bluetooth; the build fails if any is dropped) and `scripts/configs/nethunter-optional.config` (USB serial/Bluetooth/Ethernet adapters, PN533 NFC, CAN, RTL-SDR; Kconfig may drop these and the build only reports it). The result is written to `nethunter-proof.txt` in the diagnostics artifact. See the NetHunter notes below. |
+
+### NetHunter notes
+
+The `nethunter` input only adds what a GKI `Image` can carry as built-in code. On the crDroid SM8550 source, the USB gadget stack (configfs, HID, ACM, ECM, NCM, EEM, mass storage) is already built in, so HID attacks need no kernel change; only RNDIS, OBEX and ECM subset are added.
+
+- **Wi-Fi is not covered.** `CFG80211` and `MAC80211` are modules on these kernels, so USB Wi-Fi drivers (ath9k_htc, carl9170, rt2800usb, RTL88xx...) can only be modules too, and this pipeline builds and packages only the `Image`. Monitor mode on the internal Qualcomm chip also needs a patched vendor driver; no kernel option provides it. Use the NetHunter app's own module loader with modules built for the exact running kernel, or an external build of them.
+- **Deliberately untouched:** `CONFIG_SYSVIPC`, netfilter options and cfg80211 settings. They change core structure layouts or exported symbols, which makes the ROM's vendor/system_dlkm modules fail their CRC checks.
+- The Kali chroot, NetHunter app and USB Arsenal are userspace; they need only root. HID is enabled from userspace.
+- RTL-SDR support pulls the DVB core into the `Image`, which makes it larger; drop it from the optional fragment if size matters.
 
 ## Quick start
 
