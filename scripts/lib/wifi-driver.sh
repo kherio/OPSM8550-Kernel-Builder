@@ -79,13 +79,16 @@ build_rtl88x2bu_module() {
 
   export_exact_commit "$RTL88X2BU_REPO" "$RTL88X2BU_COMMIT" "$src" || return 1
   test -f "$src/Makefile" || return 1
+  # The driver Makefile carries GCC-only warning options; clang (with the
+  # kernel's -Werror) rejects them as unknown warning options.
+  sed -i '/-Wno-stringop-overread/d' "$src/Makefile"
 
   # Full module pass first: it creates the Module.symvers entries (cfg80211
   # and friends) the external module is linked against.
   make -j"$(nproc)" "${MAKE_ARGS[@]}" modules 2>&1 | tee wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS=-Wno-error modules 2>&1 | tee -a wifi-modules-build.log
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option" modules 2>&1 | tee -a wifi-modules-build.log
   if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
     wifi_errors="$(grep -E 'error:|undefined reference|No rule to make target' wifi-modules-build.log | sed -e 's#/home/runner/work/[^/]*/[^/]*/[^/]*/##g' | head -n 8 | cut -c1-320 || true)"
     [[ -n "$wifi_errors" ]] || wifi_errors="$(tail -n 10 wifi-modules-build.log | cut -c1-320)"
