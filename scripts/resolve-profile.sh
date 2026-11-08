@@ -27,6 +27,7 @@ INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (defa
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
 INPUT_DROIDSPACES="${INPUT_DROIDSPACES:-Off (default)}"
+INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Off (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
@@ -87,6 +88,15 @@ case "$INPUT_DROIDSPACES" in
   "Enable Droidspaces support with kABI patch (experimental)") DROIDSPACES=1 ;;
   *)
     echo "::error::Unknown Droidspaces mode: $INPUT_DROIDSPACES"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_WIFI_DRIVER" in
+  "Off (default)") WIFI_RTL88X2BU=0 ;;
+  "Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)") WIFI_RTL88X2BU=1 ;;
+  *)
+    echo "::error::Unknown Wi-Fi driver mode: $INPUT_WIFI_DRIVER"
     exit 1
     ;;
 esac
@@ -322,6 +332,7 @@ esac
   echo "NETHUNTER=$NETHUNTER"
   echo "BASEBAND_GUARD=$BASEBAND_GUARD"
   echo "DROIDSPACES=$DROIDSPACES"
+  echo "WIFI_RTL88X2BU=$WIFI_RTL88X2BU"
   echo "ROOT_HIDING_FIXES=$ROOT_HIDING_FIXES"
   echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
   echo "KERNEL_SOURCE=$KERNEL_SOURCE"
@@ -411,6 +422,7 @@ esac
   echo "- NetHunter options: $NETHUNTER"
   echo "- Baseband-guard: $BASEBAND_GUARD"
   echo "- Droidspaces: $DROIDSPACES"
+  echo "- RTL88x2BU Wi-Fi module: $WIFI_RTL88X2BU"
   echo "- Root hiding fixes (ptrace + Unicode): $ROOT_HIDING_FIXES"
   echo "- Mode: $INPUT_BUILD_MODE"
   if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then
