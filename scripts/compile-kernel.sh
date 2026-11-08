@@ -423,6 +423,12 @@ if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" Image 2>&1 | tee build.log; then
   grep -nE ' error:|undefined reference|No rule to make target|fatal error:' build.log | tail -n 50 || true
   echo "==== BUILD FAILED (last 200 lines) ===="
   tail -n 200 build.log || true
+  build_errors="$(grep -E ' error:|undefined reference|No rule to make target|fatal error:|ld.lld: error|Error [0-9]+|\*\*\* ' build.log | head -n 8 | cut -c1-300 || true)"
+  [[ -n "$build_errors" ]] || build_errors="$(tail -n 8 build.log | cut -c1-300)"
+  build_errors="${build_errors//'%'/'%25'}"
+  build_errors="${build_errors//$'\r'/'%0D'}"
+  build_errors="${build_errors//$'\n'/'%0A'}"
+  echo "::error title=Kernel build errors::${build_errors}"
   exit 1
 fi
 kill "$BUILD_RESOURCE_MONITOR_PID" 2>/dev/null || true
