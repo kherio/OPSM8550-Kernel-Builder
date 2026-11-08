@@ -88,7 +88,7 @@ build_rtl88x2bu_module() {
   make -j"$(nproc)" "${MAKE_ARGS[@]}" modules 2>&1 | tee wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option" modules 2>&1 | tee -a wifi-modules-build.log
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -DRHEL88 -DRHEL89 -DRTW_CFG80211_TDLS_LINK_ID" modules 2>&1 | tee -a wifi-modules-build.log
   if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
     wifi_errors="$(grep -E 'error:|undefined reference|No rule to make target' wifi-modules-build.log | sed -e 's#/home/runner/work/[^/]*/[^/]*/[^/]*/##g' | head -n 8 | cut -c1-320 || true)"
     [[ -n "$wifi_errors" ]] || wifi_errors="$(tail -n 10 wifi-modules-build.log | cut -c1-320)"
