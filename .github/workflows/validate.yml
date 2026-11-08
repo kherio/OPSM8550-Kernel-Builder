@@ -63,6 +63,7 @@ jobs:
           shellcheck --severity=warning --shell=sh scripts/templates/detect-slot.sh
           bash scripts/tests/profile-data-test.sh
           bash scripts/tests/kpm-image-test.sh
+          bash scripts/tests/nethunter-config-test.sh
           python3 scripts/tests/download-clang-test.py
           python3 scripts/tests/anykernel-slot-test.py
 

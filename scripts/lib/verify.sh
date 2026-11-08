@@ -267,7 +267,7 @@ verify_susfs_binary_presence() {
 verify_susfs_hook_linkage() {
   local llvm_nm="${CLANG_ROOT:?}/llvm-nm"
   local driver_objects="out/${KSU_DRIVER_DIR:?}/kernelsu"
-  local object_file definitions required missing
+  local object_file definitions required missing missing_annotation
   local caller_objects=(out/fs/exec.o out/security/selinux/hooks.o out/security/selinux/selinuxfs.o)
   local provider_objects=(out/fs/susfs.o)
   local ksu_objects=()
@@ -296,6 +296,9 @@ verify_susfs_hook_linkage() {
   if [[ -n "$missing" ]]; then
     echo "::error::SUSFS kernel hooks require symbols absent from the selected KernelSU driver:"
     printf '%s\n' "$missing"
+    # Also publish the symbol names as an annotation, readable without the full job log.
+    missing_annotation="$(printf '%s\n' "$missing" | head -n 20 | paste -sd ' ')"
+    echo "::error title=Missing SUSFS hook symbols::${missing_annotation}"
     return 1
   fi
   echo "[+] SUSFS exec and SELinux hooks match the compiled KernelSU/SUSFS symbols."

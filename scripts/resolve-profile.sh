@@ -24,6 +24,10 @@ INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module ch
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
+INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
+INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
+INPUT_DROIDSPACES="${INPUT_DROIDSPACES:-Off (default)}"
+INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Off (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
@@ -57,6 +61,42 @@ case "$INPUT_TCP_CONGESTION" in
   "Enable BBR as default (experimental)") TCP_BBR=1 ;;
   *)
     echo "::error::Unknown TCP congestion mode: $INPUT_TCP_CONGESTION"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_NETHUNTER" in
+  "Keep stock kernel config (default)") NETHUNTER=0 ;;
+  "Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)") NETHUNTER=1 ;;
+  *)
+    echo "::error::Unknown NetHunter mode: $INPUT_NETHUNTER"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_BASEBAND_GUARD" in
+  "Off (default)") BASEBAND_GUARD=0 ;;
+  "Enable Baseband-guard LSM (experimental)") BASEBAND_GUARD=1 ;;
+  *)
+    echo "::error::Unknown Baseband-guard mode: $INPUT_BASEBAND_GUARD"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_DROIDSPACES" in
+  "Off (default)") DROIDSPACES=0 ;;
+  "Enable Droidspaces support with kABI patch (experimental)") DROIDSPACES=1 ;;
+  *)
+    echo "::error::Unknown Droidspaces mode: $INPUT_DROIDSPACES"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_WIFI_DRIVER" in
+  "Off (default)") WIFI_RTL88X2BU=0 ;;
+  "Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)") WIFI_RTL88X2BU=1 ;;
+  *)
+    echo "::error::Unknown Wi-Fi driver mode: $INPUT_WIFI_DRIVER"
     exit 1
     ;;
 esac
@@ -192,7 +232,7 @@ if [[ "$KSU_TYPE" == *susfs* ]]; then
   SUSFS_MIN_VERSION="2.3.0"
   resolve_susfs_settings "$SOC" "$KERNEL_BRANCH"
   case "$KSU_TYPE" in
-    SukiSU-Ultra-with-susfs-KPM|SukiSU-Ultra-with-susfs-nomount-KPM|SukiSU-Ultra-with-susfs-zeromount-KPM|BakaSU-with-susfs|BakaSU-with-susfs-nomount|BakaSU-with-susfs-zeromount)
+    SukiSU-Ultra-with-susfs-KPM|SukiSU-Ultra-with-susfs-nomount-KPM|SukiSU-Ultra-with-susfs-zeromount-KPM|BakaSU-with-susfs|BakaSU-with-susfs-nomount|BakaSU-with-susfs-zeromount|FinaSU-with-susfs|FinaSU-with-susfs-nomount)
       SUSFS_COMMIT="$(su_session_compatible_susfs_commit "$SUSFS_REF")"
       echo "::notice::Using su-session-compatible SUSFS v2.3.0 commit $SUSFS_COMMIT for $SUSFS_REF ($KSU_TYPE)."
       ;;
@@ -289,6 +329,10 @@ esac
   echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
+  echo "NETHUNTER=$NETHUNTER"
+  echo "BASEBAND_GUARD=$BASEBAND_GUARD"
+  echo "DROIDSPACES=$DROIDSPACES"
+  echo "WIFI_RTL88X2BU=$WIFI_RTL88X2BU"
   echo "ROOT_HIDING_FIXES=$ROOT_HIDING_FIXES"
   echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
   echo "KERNEL_SOURCE=$KERNEL_SOURCE"
@@ -375,6 +419,10 @@ esac
   echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
+  echo "- NetHunter options: $NETHUNTER"
+  echo "- Baseband-guard: $BASEBAND_GUARD"
+  echo "- Droidspaces: $DROIDSPACES"
+  echo "- RTL88x2BU Wi-Fi module: $WIFI_RTL88X2BU"
   echo "- Root hiding fixes (ptrace + Unicode): $ROOT_HIDING_FIXES"
   echo "- Mode: $INPUT_BUILD_MODE"
   if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then

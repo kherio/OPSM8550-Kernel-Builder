@@ -5,6 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NETHUNTER_CONFIG_DIR="${SCRIPT_DIR}/configs"
+DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 # shellcheck source=lib/git-helpers.sh
 . "${SCRIPT_DIR}/lib/git-helpers.sh"
 # shellcheck source=lib/kernel-helpers.sh
@@ -23,6 +25,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/nomount-setup.sh"
 # shellcheck source=lib/zeromount-setup.sh
 . "${SCRIPT_DIR}/lib/zeromount-setup.sh"
+# shellcheck source=lib/bbg-setup.sh
+. "${SCRIPT_DIR}/lib/bbg-setup.sh"
+# shellcheck source=lib/droidspaces-setup.sh
+. "${SCRIPT_DIR}/lib/droidspaces-setup.sh"
+# shellcheck source=lib/wifi-driver.sh
+. "${SCRIPT_DIR}/lib/wifi-driver.sh"
 # shellcheck source=lib/verify.sh
 . "${SCRIPT_DIR}/lib/verify.sh"
 
@@ -41,6 +49,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
+: "${NETHUNTER:=0}"
+: "${BASEBAND_GUARD:=0}"
+: "${DROIDSPACES:=0}"
+: "${WIFI_RTL88X2BU:=0}"
 : "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
@@ -189,6 +201,14 @@ if [[ "$ROOT_HIDING_FIXES" == 1 ]]; then
   apply_root_hiding_fixes "${SCRIPT_DIR}/patches"
 fi
 
+if [[ "$BASEBAND_GUARD" == 1 ]]; then
+  install_baseband_guard
+fi
+
+if [[ "$DROIDSPACES" == 1 ]]; then
+  apply_droidspaces_kabi_patch "${SCRIPT_DIR}/patches"
+fi
+
 # Match the ROM kernel's CONFIG_LOCALVERSION_AUTO result without inheriting the
 # intentionally dirty integration worktree. Vendor modules include this release
 # string in vermagic and fail during early boot when the source identity is lost.
@@ -217,6 +237,10 @@ if [[ "$TCP_BBR" == 1 ]]; then
     exit 1
   }
 fi
+
+verify_nethunter_config out/.config nethunter-proof.txt
+verify_bbg_config out/.config bbg-proof.txt
+verify_droidspaces_config out/.config droidspaces-proof.txt
 
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
@@ -310,6 +334,9 @@ if [[ "$BUILD_MODE" == "Patch/config validation only" ]]; then
       "${KSU_DRIVER_DIR}/kernelsu/"
     )
   fi
+  if [[ "$BASEBAND_GUARD" == 1 ]]; then
+    SMOKE_TARGETS+=("${BBG_SECURITY_DIR}/baseband-guard/")
+  fi
   if [[ "$KSU_TYPE" == *nomount* ]]; then
     SMOKE_TARGETS+=("${NOMOUNT_FS_DIR}/nomount/nomount.o")
   fi
@@ -346,6 +373,15 @@ if [[ "$BUILD_MODE" == "Patch/config validation only" ]]; then
     if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" "${SMOKE_TARGETS[@]}" 2>&1 | tee integration-smoke.log; then
       COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
       echo "::error::KernelSU/SUSFS/NoMount/ZeroMount/KPM integration object smoke compile failed."
+      # Surface the first compiler errors as an annotation so they are visible
+      # without downloading the diagnostics artifact.
+      smoke_errors="$(grep -E ' error:|undefined reference|No rule to make target|fatal error:' integration-smoke.log | head -n 8 | cut -c1-300 || true)"
+      if [[ -n "$smoke_errors" ]]; then
+        smoke_errors="${smoke_errors//'%'/'%25'}"
+        smoke_errors="${smoke_errors//$'\r'/'%0D'}"
+        smoke_errors="${smoke_errors//$'\n'/'%0A'}"
+        echo "::error title=Smoke compile errors::${smoke_errors}"
+      fi
       exit 1
     fi
     COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
@@ -390,6 +426,12 @@ if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" Image 2>&1 | tee build.log; then
   grep -nE ' error:|undefined reference|No rule to make target|fatal error:' build.log | tail -n 50 || true
   echo "==== BUILD FAILED (last 200 lines) ===="
   tail -n 200 build.log || true
+  build_errors="$(grep -E ' error:|undefined reference|No rule to make target|fatal error:|ld.lld: error|Error [0-9]+|\*\*\* ' build.log | head -n 8 | cut -c1-300 || true)"
+  [[ -n "$build_errors" ]] || build_errors="$(tail -n 8 build.log | cut -c1-300)"
+  build_errors="${build_errors//'%'/'%25'}"
+  build_errors="${build_errors//$'\r'/'%0D'}"
+  build_errors="${build_errors//$'\n'/'%0A'}"
+  echo "::error title=Kernel build errors::${build_errors}"
   exit 1
 fi
 kill "$BUILD_RESOURCE_MONITOR_PID" 2>/dev/null || true
@@ -429,6 +471,15 @@ if [[ "$KSU_TYPE" == *KPM* ]]; then
   grep -E '^CONFIG_KPM=|^CONFIG_KALLSYMS(_ALL)?=' out/.config || true
   verify_kpm_binary_presence
   patch_kpm_image out/arch/arm64/boot/Image kpm-image-proof.txt
+fi
+
+if [[ "$WIFI_RTL88X2BU" == 1 ]]; then
+  BUILD_PHASE="RTL88x2BU external module"
+  # A failure here must not discard the finished kernel Image.
+  if ! build_rtl88x2bu_module "$KERNEL_RELEASE"; then
+    echo "::warning title=Wi-Fi module::The RTL88x2BU module did not build; the kernel itself is unaffected."
+    rm -rf "$WIFI_STAGE_DIR"
+  fi
 fi
 
 ccache --show-stats || true
