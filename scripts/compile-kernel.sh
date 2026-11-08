@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NETHUNTER_CONFIG_DIR="${SCRIPT_DIR}/configs"
 # shellcheck source=lib/git-helpers.sh
 . "${SCRIPT_DIR}/lib/git-helpers.sh"
 # shellcheck source=lib/kernel-helpers.sh
@@ -41,6 +42,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
+: "${NETHUNTER:=0}"
 : "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
@@ -217,6 +219,8 @@ if [[ "$TCP_BBR" == 1 ]]; then
     exit 1
   }
 fi
+
+verify_nethunter_config out/.config nethunter-proof.txt
 
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
