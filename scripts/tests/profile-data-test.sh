@@ -294,6 +294,8 @@ grep -Fq 'SukiSU-Ultra-with-KPM|SukiSU-Ultra-with-susfs-KPM|SukiSU-Ultra-with-su
   || fail "resolver does not route all SukiSU presets to SukiSU Ultra"
 grep -Fq 'SUSFS_COMMIT="$(su_session_compatible_susfs_commit "$SUSFS_REF")"' "$RESOLVER_SCRIPT" \
   || fail "resolver does not use the su-session-compatible SUSFS commit map"
+grep -Fq '|FinaSU-with-susfs|FinaSU-with-susfs-nomount)' "$RESOLVER_SCRIPT" \
+  || fail "FinaSU SUSFS presets must use the pinned su-session-compatible SUSFS commit"
 grep -Fq '"SukiSU-Ultra-with-KPM"|"SukiSU-Ultra-with-susfs-KPM"|"SukiSU-Ultra-with-susfs-nomount-KPM"|"SukiSU-Ultra-with-susfs-zeromount-KPM")' "$KSU_SETUP_SCRIPT" \
   || fail "KernelSU setup does not install SukiSU Ultra for all combined presets"
 grep -Fq 'ZEROMOUNT_COMMIT="2978dcad87dc7055e2e4596c603313c553a9a4b4"' "$RESOLVER_SCRIPT" \

@@ -104,6 +104,38 @@ on:
         options:
           - Keep stock TCP congestion control (default)
           - Enable BBR as default (experimental)
+      nethunter:
+        description: Kali NetHunter kernel support (USB gadget RNDIS/OBEX, USB serial/Bluetooth/Ethernet, NFC, CAN, RTL-SDR); off by default
+        required: true
+        type: choice
+        default: Keep stock kernel config (default)
+        options:
+          - Keep stock kernel config (default)
+          - Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)
+      baseband_guard:
+        description: Baseband-guard LSM that blocks writes to critical partitions (boot/recovery stay writable); off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Enable Baseband-guard LSM (experimental)
+      droidspaces:
+        description: Droidspaces container support (SYSVIPC/IPC/PID namespaces) with the kABI padding patch; off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Enable Droidspaces support with kABI patch (experimental)
+      wifi_driver:
+        description: Build an external USB Wi-Fi driver as a separate KernelSU module ZIP (kernel Image unchanged); off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)
       root_hiding_fixes:
         description: Kernel fixes that close root-detection leaks on 5.15 (ptrace message leak, Unicode path bypass); off by default
         required: true
@@ -190,6 +222,10 @@ jobs:
           INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
+          INPUT_NETHUNTER: ${{ inputs.nethunter }}
+          INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
+          INPUT_DROIDSPACES: ${{ inputs.droidspaces }}
+          INPUT_WIFI_DRIVER: ${{ inputs.wifi_driver }}
           INPUT_ROOT_HIDING_FIXES: ${{ inputs.root_hiding_fixes }}
         run: bash scripts/resolve-profile.sh
 
@@ -327,6 +363,10 @@ jobs:
         if: inputs.build_mode != 'Patch/config validation only'
         run: bash scripts/make-anykernel-zip.sh
 
+      - name: Package Wi-Fi driver KernelSU module
+        if: steps.package.outcome == 'success' && env.WIFI_RTL88X2BU == '1'
+        run: bash scripts/package-wifi-module.sh
+
       - name: Publish build diagnostics
         if: always() && steps.resolve.outcome == 'success'
         run: bash scripts/publish-diagnostics.sh
@@ -365,6 +405,12 @@ jobs:
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/kpm-source-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/kpm-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/kpm-image-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/nethunter-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/bbg-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/bbg-source-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-source-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/wifi-driver-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/.config
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/Module.symvers
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/vmlinux.symvers
