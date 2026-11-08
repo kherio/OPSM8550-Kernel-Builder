@@ -54,6 +54,7 @@ append_file_block() {
   echo "- NetHunter options: ${NETHUNTER:-0}"
   echo "- Baseband-guard: ${BASEBAND_GUARD:-0}"
   echo "- Droidspaces: ${DROIDSPACES:-0}"
+  echo "- RTL88x2BU Wi-Fi module: ${WIFI_RTL88X2BU:-0}"
   echo "- Root hiding fixes: ${ROOT_HIDING_FIXES:-0}"
   if [[ -n "${KSU_COMMIT:-}" ]]; then
     echo "- KernelSU repository: ${KSU_REPO:-unknown}"
@@ -101,5 +102,6 @@ append_file_block() {
   append_file_block "bbg-proof.txt"            "${SOC}/bbg-proof.txt"
   append_file_block "bbg-source-proof.txt"     "${SOC}/bbg-source-proof.txt"
   append_file_block "droidspaces-proof.txt"    "${SOC}/droidspaces-proof.txt"
+  append_file_block "wifi-driver-proof.txt"    "${SOC}/wifi-driver-proof.txt"
   append_file_block "droidspaces-source-proof.txt" "${SOC}/droidspaces-source-proof.txt"
 } >> "$GITHUB_STEP_SUMMARY"

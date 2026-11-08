@@ -29,6 +29,8 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 . "${SCRIPT_DIR}/lib/bbg-setup.sh"
 # shellcheck source=lib/droidspaces-setup.sh
 . "${SCRIPT_DIR}/lib/droidspaces-setup.sh"
+# shellcheck source=lib/wifi-driver.sh
+. "${SCRIPT_DIR}/lib/wifi-driver.sh"
 # shellcheck source=lib/verify.sh
 . "${SCRIPT_DIR}/lib/verify.sh"
 
@@ -50,6 +52,7 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${NETHUNTER:=0}"
 : "${BASEBAND_GUARD:=0}"
 : "${DROIDSPACES:=0}"
+: "${WIFI_RTL88X2BU:=0}"
 : "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
@@ -468,6 +471,15 @@ if [[ "$KSU_TYPE" == *KPM* ]]; then
   grep -E '^CONFIG_KPM=|^CONFIG_KALLSYMS(_ALL)?=' out/.config || true
   verify_kpm_binary_presence
   patch_kpm_image out/arch/arm64/boot/Image kpm-image-proof.txt
+fi
+
+if [[ "$WIFI_RTL88X2BU" == 1 ]]; then
+  BUILD_PHASE="RTL88x2BU external module"
+  # A failure here must not discard the finished kernel Image.
+  if ! build_rtl88x2bu_module "$KERNEL_RELEASE"; then
+    echo "::warning title=Wi-Fi module::The RTL88x2BU module did not build; the kernel itself is unaffected."
+    rm -rf "$WIFI_STAGE_DIR"
+  fi
 fi
 
 ccache --show-stats || true

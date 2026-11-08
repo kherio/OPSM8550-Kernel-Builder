@@ -128,6 +128,14 @@ on:
         options:
           - Off (default)
           - Enable Droidspaces support with kABI patch (experimental)
+      wifi_driver:
+        description: Build an external USB Wi-Fi driver as a separate KernelSU module ZIP (kernel Image unchanged); off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)
       root_hiding_fixes:
         description: Kernel fixes that close root-detection leaks on 5.15 (ptrace message leak, Unicode path bypass); off by default
         required: true
@@ -217,6 +225,7 @@ jobs:
           INPUT_NETHUNTER: ${{ inputs.nethunter }}
           INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
           INPUT_DROIDSPACES: ${{ inputs.droidspaces }}
+          INPUT_WIFI_DRIVER: ${{ inputs.wifi_driver }}
           INPUT_ROOT_HIDING_FIXES: ${{ inputs.root_hiding_fixes }}
         run: bash scripts/resolve-profile.sh
 
@@ -354,6 +363,10 @@ jobs:
         if: inputs.build_mode != 'Patch/config validation only'
         run: bash scripts/make-anykernel-zip.sh
 
+      - name: Package Wi-Fi driver KernelSU module
+        if: steps.package.outcome == 'success' && env.WIFI_RTL88X2BU == '1'
+        run: bash scripts/package-wifi-module.sh
+
       - name: Publish build diagnostics
         if: always() && steps.resolve.outcome == 'success'
         run: bash scripts/publish-diagnostics.sh
@@ -397,6 +410,7 @@ jobs:
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/bbg-source-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-source-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/wifi-driver-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/.config
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/Module.symvers
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/vmlinux.symvers
