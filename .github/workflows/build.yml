@@ -112,6 +112,22 @@ on:
         options:
           - Keep stock kernel config (default)
           - Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)
+      baseband_guard:
+        description: Baseband-guard LSM that blocks writes to critical partitions (boot/recovery stay writable); off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Enable Baseband-guard LSM (experimental)
+      droidspaces:
+        description: Droidspaces container support (SYSVIPC/IPC/PID namespaces) with the kABI padding patch; off by default
+        required: true
+        type: choice
+        default: Off (default)
+        options:
+          - Off (default)
+          - Enable Droidspaces support with kABI patch (experimental)
       root_hiding_fixes:
         description: Kernel fixes that close root-detection leaks on 5.15 (ptrace message leak, Unicode path bypass); off by default
         required: true
@@ -199,6 +215,8 @@ jobs:
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
           INPUT_NETHUNTER: ${{ inputs.nethunter }}
+          INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
+          INPUT_DROIDSPACES: ${{ inputs.droidspaces }}
           INPUT_ROOT_HIDING_FIXES: ${{ inputs.root_hiding_fixes }}
         run: bash scripts/resolve-profile.sh
 
@@ -375,6 +393,10 @@ jobs:
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/kpm-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/kpm-image-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/nethunter-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/bbg-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/bbg-source-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-proof.txt
+            ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/droidspaces-source-proof.txt
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/.config
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/Module.symvers
             ${{ github.workspace }}/${{ steps.resolve.outputs.soc }}/out/vmlinux.symvers

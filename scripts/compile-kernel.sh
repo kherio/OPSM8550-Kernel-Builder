@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NETHUNTER_CONFIG_DIR="${SCRIPT_DIR}/configs"
+DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 # shellcheck source=lib/git-helpers.sh
 . "${SCRIPT_DIR}/lib/git-helpers.sh"
 # shellcheck source=lib/kernel-helpers.sh
@@ -24,6 +25,10 @@ NETHUNTER_CONFIG_DIR="${SCRIPT_DIR}/configs"
 . "${SCRIPT_DIR}/lib/nomount-setup.sh"
 # shellcheck source=lib/zeromount-setup.sh
 . "${SCRIPT_DIR}/lib/zeromount-setup.sh"
+# shellcheck source=lib/bbg-setup.sh
+. "${SCRIPT_DIR}/lib/bbg-setup.sh"
+# shellcheck source=lib/droidspaces-setup.sh
+. "${SCRIPT_DIR}/lib/droidspaces-setup.sh"
 # shellcheck source=lib/verify.sh
 . "${SCRIPT_DIR}/lib/verify.sh"
 
@@ -43,6 +48,8 @@ NETHUNTER_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
 : "${NETHUNTER:=0}"
+: "${BASEBAND_GUARD:=0}"
+: "${DROIDSPACES:=0}"
 : "${ROOT_HIDING_FIXES:=0}"
 
 BUILD_STARTED_AT="$(date +%s)"
@@ -191,6 +198,14 @@ if [[ "$ROOT_HIDING_FIXES" == 1 ]]; then
   apply_root_hiding_fixes "${SCRIPT_DIR}/patches"
 fi
 
+if [[ "$BASEBAND_GUARD" == 1 ]]; then
+  install_baseband_guard
+fi
+
+if [[ "$DROIDSPACES" == 1 ]]; then
+  apply_droidspaces_kabi_patch "${SCRIPT_DIR}/patches"
+fi
+
 # Match the ROM kernel's CONFIG_LOCALVERSION_AUTO result without inheriting the
 # intentionally dirty integration worktree. Vendor modules include this release
 # string in vermagic and fail during early boot when the source identity is lost.
@@ -221,6 +236,8 @@ if [[ "$TCP_BBR" == 1 ]]; then
 fi
 
 verify_nethunter_config out/.config nethunter-proof.txt
+verify_bbg_config out/.config bbg-proof.txt
+verify_droidspaces_config out/.config droidspaces-proof.txt
 
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
@@ -313,6 +330,9 @@ if [[ "$BUILD_MODE" == "Patch/config validation only" ]]; then
       kernel/reboot.o
       "${KSU_DRIVER_DIR}/kernelsu/"
     )
+  fi
+  if [[ "$BASEBAND_GUARD" == 1 ]]; then
+    SMOKE_TARGETS+=("${BBG_SECURITY_DIR}/baseband-guard/")
   fi
   if [[ "$KSU_TYPE" == *nomount* ]]; then
     SMOKE_TARGETS+=("${NOMOUNT_FS_DIR}/nomount/nomount.o")

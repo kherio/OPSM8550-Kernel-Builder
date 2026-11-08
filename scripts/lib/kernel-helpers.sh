@@ -341,6 +341,8 @@ apply_variant_configs() {
 
   apply_tcp_bbr_config "$config_file"
   apply_nethunter_config "$config_file"
+  apply_droidspaces_config "$config_file"
+  apply_bbg_config "$config_file"
 
   if [[ "$KSU_TYPE" == *susfs* ]]; then
     enable_susfs_configs "$config_file"

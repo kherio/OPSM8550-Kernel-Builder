@@ -1,0 +1,4 @@
+Vendored unmodified from ravindu644/Droidspaces-OSS
+commit cdadb9eb5d0f86aacffff60776333e6f6b73a30a
+path   Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch
+sha256 47fc945b2d73d9737d56c0f1c3a74cda0a95c30f9dc1b1abe546fa48940c4460

@@ -25,6 +25,8 @@ INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
+INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
+INPUT_DROIDSPACES="${INPUT_DROIDSPACES:-Off (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
@@ -67,6 +69,24 @@ case "$INPUT_NETHUNTER" in
   "Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)") NETHUNTER=1 ;;
   *)
     echo "::error::Unknown NetHunter mode: $INPUT_NETHUNTER"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_BASEBAND_GUARD" in
+  "Off (default)") BASEBAND_GUARD=0 ;;
+  "Enable Baseband-guard LSM (experimental)") BASEBAND_GUARD=1 ;;
+  *)
+    echo "::error::Unknown Baseband-guard mode: $INPUT_BASEBAND_GUARD"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_DROIDSPACES" in
+  "Off (default)") DROIDSPACES=0 ;;
+  "Enable Droidspaces support with kABI patch (experimental)") DROIDSPACES=1 ;;
+  *)
+    echo "::error::Unknown Droidspaces mode: $INPUT_DROIDSPACES"
     exit 1
     ;;
 esac
@@ -300,6 +320,8 @@ esac
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
   echo "NETHUNTER=$NETHUNTER"
+  echo "BASEBAND_GUARD=$BASEBAND_GUARD"
+  echo "DROIDSPACES=$DROIDSPACES"
   echo "ROOT_HIDING_FIXES=$ROOT_HIDING_FIXES"
   echo "SOURCE_LAYOUT=$SOURCE_LAYOUT"
   echo "KERNEL_SOURCE=$KERNEL_SOURCE"
@@ -387,6 +409,8 @@ esac
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
   echo "- NetHunter options: $NETHUNTER"
+  echo "- Baseband-guard: $BASEBAND_GUARD"
+  echo "- Droidspaces: $DROIDSPACES"
   echo "- Root hiding fixes (ptrace + Unicode): $ROOT_HIDING_FIXES"
   echo "- Mode: $INPUT_BUILD_MODE"
   if [[ -n "$SUPPORTED_ANDROID_VERSIONS" ]]; then
