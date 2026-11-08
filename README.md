@@ -1,9 +1,17 @@
-# OnePlus Snapdragon Kernel Builder
+# OnePlus Snapdragon Kernel Builder (with Kali NetHunter support)
 
 GitHub Actions pipeline for building selected OnePlus Snapdragon 7 Gen 3(SM7550),
 8 Gen 1(SM8450), 8 Gen 2(SM8550), and 8 Gen 3(SM8650) kernels. The repository contains the build
 pipeline, validation, packaging, and release automation; kernel sources are
 resolved from upstream repositories at build time.
+
+> **Kali NetHunter kernel.** Set the `nethunter` input to build the kernel with
+> everything Kali NetHunter needs from the kernel side (USB gadget, USB serial,
+> Bluetooth, USB Ethernet, NFC, CAN, SDR, IP Set), optionally together with
+> Baseband-guard, Droidspaces and an external USB Wi-Fi driver module. The
+> ZIP and Image names get a `_nethunter` suffix. Validated on the OnePlus 11
+> with crDroid, FinaSU + SUSFS + NoMount. See
+> [Kali NetHunter kernel: technical reference](#kali-nethunter-kernel-technical-reference).
 
 ## Supported build profiles
 
@@ -336,6 +344,83 @@ The "core" options must stay enabled or the build fails; the "optional" ones are
 - **Wi-Fi:** `CFG80211` and `MAC80211` are modules on these kernels, so USB Wi-Fi drivers can only be modules as well. The kernel build does not put them in the `Image`. The `wifi_driver` input builds one as a separate KernelSU module ZIP against the exact running kernel (currently the RTL8812BU of the TP-Link Archer T3U Plus). Monitor mode on the internal Qualcomm chip needs a patched vendor driver; no kernel option provides it.
 - **Droidspaces and SYSVIPC:** `CONFIG_SYSVIPC`, cgroup controllers and netfilter changes alter core structure layouts and break the ROM's modules. They are never enabled by `nethunter`; the `droidspaces` input handles SYSVIPC through its own kABI patch.
 - The Kali chroot, NetHunter app and USB Arsenal are userspace. HID is enabled from userspace.
+
+## Kali NetHunter kernel: technical reference
+
+### Design rule: keep the ROM's modules loading
+
+The pipeline builds only the GKI `Image`. The ROM keeps its own `vendor_dlkm`
+and `system_dlkm` modules, which were linked against exported-symbol CRCs
+(`CONFIG_MODVERSIONS=y`) and a fixed `vermagic`. Anything that changes a
+structure layout seen by those modules changes the CRCs and the device
+bootloops or loses hardware. So every feature below is either:
+
+- **built in and layout-neutral** (drivers whose objects live only in the `Image`),
+- **made layout-neutral by a patch** (Droidspaces/SYSVIPC), or
+- **kept out of the `Image`** (Wi-Fi drivers, shipped as a separate module).
+
+The kernel release string is copied from the ROM kernel on purpose, so
+`uname -r` and the build date match the stock kernel.
+
+### What each input changes
+
+| Input | Mechanism | ABI effect |
+| --- | --- | --- |
+| `nethunter` | Config fragments `scripts/configs/nethunter-core.config` (build fails if dropped) and `nethunter-optional.config` (reported as kept or dropped), applied before `olddefconfig`, then checked in `verify_nethunter_config` | None: only driver and protocol code |
+| `baseband_guard` | Pinned export (no `.git`) of Baseband-guard linked into `security/`, `CONFIG_BBG=y`, `baseband_guard` appended to `CONFIG_LSM`, boot/recovery blocking off | None: stackable LSM, no fields added to core structs |
+| `droidspaces` | Vendored Droidspaces-OSS patch moves `sysvsem`/`sysvshm` into `task_struct`'s `ANDROID_KABI_RESERVE(6..8)` slots; then `scripts/configs/droidspaces.config` | Size and offsets of `task_struct` unchanged. The build fails if the slots are not free, if the patch does not apply, or if `CFS_BANDWIDTH` or `CGROUP_PIDS` end up enabled |
+| `wifi_driver` | External module built against the finished tree and signed with the kernel's own key | None: nothing is linked into the `Image` |
+
+Proof files in the diagnostics artifact: `nethunter-proof.txt`, `bbg-proof.txt`,
+`bbg-source-proof.txt`, `droidspaces-proof.txt`, `droidspaces-source-proof.txt`,
+`wifi-driver-proof.txt`.
+
+### Root stack used with it
+
+FinaSU carries its own KernelSU and SUSFS layer, so two things are special
+for it (both in `scripts/`):
+
+- SUSFS is pinned to the commit `ffa69590787d097f54cb60ed79fa6fd5e285bb41`
+  (`gki-android14-5.15`). Newer SUSFS kernel patches need `susfs_security_*`
+  hooks and `SUSFS_LOGI_RL` stubs that FinaSU does not have.
+- The kernel-side SUSFS patch references `fake_state` in `security/selinux`,
+  which FinaSU's own `selinux_hide.c` does not define. The pipeline adds only
+  that missing symbol so `vmlinux` links.
+
+### Build order (`scripts/compile-kernel.sh`)
+
+1. Install the root solution, SUSFS, UAPI backports and NoMount.
+2. Root-hiding fixes (`ptrace`, Unicode) when enabled.
+3. `droidspaces`: slot pre-check, patch, post-check on `include/linux/sched.h`.
+4. `baseband_guard`: export, symlink, Makefile and Kconfig entries.
+5. Config: `gki_defconfig` plus device fragments, the NetHunter / Droidspaces / BBG options, `make olddefconfig`, then the required-option and ABI-guard checks.
+6. Integration smoke compile (includes `security/baseband-guard/`), then the full `Image`.
+7. Release-identity verification, then the AnyKernel3 ZIP.
+8. `wifi_driver` (optional): `make modules`, external module build, vermagic check, signature with the kernel key, KernelSU module ZIP. A failure here only warns.
+
+### Wi-Fi USB driver (TP-Link Archer T3U Plus)
+
+- Chip: RTL8812BU/8822BU, USB `2357:0138`. Driver: `morrownr/88x2bu-20210702`, pinned commit, `cfg80211` only (monitor mode and injection supported), no firmware files needed.
+- Why not `rtw88`: it needs `mac80211` with LED support, which the OnePlus `mac80211.ko` lacks; that would mean replacing `mac80211` at runtime.
+- The module ZIP is a KernelSU module that loads nothing at boot. Use `su -c sh /data/adb/modules/nethunter-wifi-rtl88x2bu/nh-wifi.sh load|status|unload`.
+- Verified at build time: `vermagic` equals the kernel release, USB ID present in the module aliases, module signed with the kernel key when available.
+
+### Checking a flashed kernel
+
+```sh
+cat /sys/kernel/security/lsm                    # contains baseband_guard
+cat /proc/sys/net/ipv4/tcp_congestion_control   # bbr
+ls /proc/sysvipc                                # msg sem shm (Droidspaces)
+ip link add vcan0 type vcan && ip link set vcan0 up   # CAN stack
+```
+
+### Known limits
+
+- Built-in options Kconfig drops are listed in `nethunter-proof.txt` (for example `CAN_ESD_USB2` and `CAN_F81604` on the crDroid source).
+- Wi-Fi support is per adapter. `mac80211` LED triggers, Minstrel, `ath9k`, `ath10k`, `mt76` and out-of-tree `rtw88` need replacing the ROM's `mac80211` at runtime and are not provided yet.
+- Monitor mode on the internal Qualcomm Wi-Fi needs a patched vendor driver; no kernel option provides it.
+- The NetHunter app is old; the Kali chroot and Droidspaces are the more reliable paths on recent Android.
+- Always keep a stock `boot` image available when flashing.
 
 ## Quick start
 
