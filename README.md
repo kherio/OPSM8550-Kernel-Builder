@@ -312,15 +312,30 @@ before. Each one is recorded in the run summary and in the diagnostics artifact.
 | `nethunter`         | `Keep stock kernel config (default)` / `Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)` | Builds in the options listed in `scripts/configs/nethunter-core.config` (USB gadget RNDIS/OBEX/ECM subset, USB serial, USB Bluetooth; the build fails if any is dropped) and `scripts/configs/nethunter-optional.config` (USB serial/Bluetooth/Ethernet adapters, PN533 NFC, CAN, RTL-SDR; Kconfig may drop these and the build only reports it). The result is written to `nethunter-proof.txt` in the diagnostics artifact. See the NetHunter notes below. |
 | `baseband_guard`    | `Off (default)` / `Enable Baseband-guard LSM (experimental)` | Integrates [Baseband-guard](https://github.com/vc-teahouse/Baseband-guard) at a pinned commit as a built-in LSM (`CONFIG_BBG=y`, `baseband_guard` appended to `CONFIG_LSM`). Boot/recovery protection is left off so the kernel can still be flashed from Android. Proof: `bbg-proof.txt`, `bbg-source-proof.txt`. |
 | `droidspaces`       | `Off (default)` / `Enable Droidspaces support with kABI patch (experimental)` | Applies the Droidspaces-OSS GKI patch that moves `sysvsem`/`sysvshm` into `task_struct`'s `ANDROID_KABI_RESERVE(6..8)` padding (the build fails if those slots are not free), then enables the ABI-safe options in `scripts/configs/droidspaces.config`. `CONFIG_CFS_BANDWIDTH` and `CONFIG_CGROUP_PIDS` are never enabled and the build fails if they end up on, because they change the kABI. Proof: `droidspaces-proof.txt`, `droidspaces-source-proof.txt`. |
+| `wifi_driver`       | `Off (default)` / `Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)` | After the `Image`, builds the morrownr `88x2bu` driver (pinned commit, USB 2357:0138, cfg80211 only, monitor mode) as an external module against the same tree and signs it with the kernel's key. Output is `NetHunter-WiFi-RTL88x2BU_<kernel>_<timestamp>.zip` in the release assets, a KernelSU module that loads nothing at boot (`nh-wifi.sh load`). A failure here only warns; the kernel is still produced. Proof: `wifi-driver-proof.txt`. |
 
 ### NetHunter notes
 
-The `nethunter` input only adds what a GKI `Image` can carry as built-in code. On the crDroid SM8550 source, the USB gadget stack (configfs, HID, ACM, ECM, NCM, EEM, mass storage) is already built in, so HID attacks need no kernel change; only RNDIS, OBEX and ECM subset are added.
+Setting `nethunter` builds everything NetHunter needs from the kernel into the `Image`. Pair it with the Kali chroot and the NetHunter app (userspace, root only). The ZIP and Image names get a `_nethunter` suffix so these builds are easy to tell apart from the rest.
 
-- **Wi-Fi is not covered.** `CFG80211` and `MAC80211` are modules on these kernels, so USB Wi-Fi drivers (ath9k_htc, carl9170, rt2800usb, RTL88xx...) can only be modules too, and this pipeline builds and packages only the `Image`. Monitor mode on the internal Qualcomm chip also needs a patched vendor driver; no kernel option provides it. Use the NetHunter app's own module loader with modules built for the exact running kernel, or an external build of them.
-- **Deliberately untouched:** `CONFIG_SYSVIPC`, netfilter options and cfg80211 settings. They change core structure layouts or exported symbols, which makes the ROM's vendor/system_dlkm modules fail their CRC checks.
-- The Kali chroot, NetHunter app and USB Arsenal are userspace; they need only root. HID is enabled from userspace.
-- RTL-SDR support pulls the DVB core into the `Image`, which makes it larger; drop it from the optional fragment if size matters.
+What the option includes (all built in, none of it touches the ROM's modules):
+
+| Area | Options |
+| --- | --- |
+| USB gadget | RNDIS, OBEX and ECM subset (configfs, HID, ACM, ECM, NCM, EEM and mass storage are already built in on the crDroid SM8550 source, so HID attacks need no kernel change) |
+| USB serial | generic, FTDI, CP210x, CH341, PL2303 |
+| Bluetooth | USB dongles (generic, Broadcom, Realtek, MediaTek) and virtual HCI |
+| USB Ethernet | CDC Ethernet/NCM/subset, RNDIS host, AX88xxx, SMSC95xx, DM9601, MCS7830 |
+| NFC | NFC digital, PN533 (USB) |
+| CAN | CAN core, raw/BCM/GW/J1939/ISO-TP, vcan, SLCAN, C_CAN, M_CAN, MCP251X and the USB adapters (gs_usb, 8devices, EMS, ESD, Kvaser, PEAK, UCAN, MCBA, ETAS, F81604) |
+| SDR | Airspy and HackRF |
+| Firewall | IP Set (all set types) and `xt_set` |
+
+The "core" options must stay enabled or the build fails; the "optional" ones are reported as kept or dropped in `nethunter-proof.txt`.
+
+- **Wi-Fi:** `CFG80211` and `MAC80211` are modules on these kernels, so USB Wi-Fi drivers can only be modules as well. The kernel build does not put them in the `Image`. The `wifi_driver` input builds one as a separate KernelSU module ZIP against the exact running kernel (currently the RTL8812BU of the TP-Link Archer T3U Plus). Monitor mode on the internal Qualcomm chip needs a patched vendor driver; no kernel option provides it.
+- **Droidspaces and SYSVIPC:** `CONFIG_SYSVIPC`, cgroup controllers and netfilter changes alter core structure layouts and break the ROM's modules. They are never enabled by `nethunter`; the `droidspaces` input handles SYSVIPC through its own kABI patch.
+- The Kali chroot, NetHunter app and USB Arsenal are userspace. HID is enabled from userspace.
 
 ## Quick start
 
