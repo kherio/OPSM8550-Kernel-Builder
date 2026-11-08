@@ -337,7 +337,9 @@ su_session_compatible_susfs_commit() {
   # Keep every kernel branch pinned to a SUSFS v2.3.0 revision whose KernelSU
   # patch matches the su-session fd ABI in the pinned SukiSU Ultra and BakaSU
   # drivers. Newer patches require preinit and external SELinux hooks that
-  # these driver revisions do not export.
+  # these driver revisions do not export. FinaSU uses the same pins: it carries
+  # its own SUSFS layer and does not provide the susfs_security_* hooks (or the
+  # SUSFS_LOGI_RL stubs) that the newest upstream branch heads expect.
   # Updated through 2026-09-15: includes the enabled-features NULL-deref fix,
   # corrected CTIME spoof bit, and super.c declaration compatibility fix.
   # Later upstream revisions change the KernelSU patch and need a new adapter.
