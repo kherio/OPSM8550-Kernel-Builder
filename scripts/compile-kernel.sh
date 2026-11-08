@@ -346,6 +346,15 @@ if [[ "$BUILD_MODE" == "Patch/config validation only" ]]; then
     if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" "${SMOKE_TARGETS[@]}" 2>&1 | tee integration-smoke.log; then
       COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
       echo "::error::KernelSU/SUSFS/NoMount/ZeroMount/KPM integration object smoke compile failed."
+      # Surface the first compiler errors as an annotation so they are visible
+      # without downloading the diagnostics artifact.
+      smoke_errors="$(grep -E ' error:|undefined reference|No rule to make target|fatal error:' integration-smoke.log | head -n 8 | cut -c1-300 || true)"
+      if [[ -n "$smoke_errors" ]]; then
+        smoke_errors="${smoke_errors//'%'/'%25'}"
+        smoke_errors="${smoke_errors//$'\r'/'%0D'}"
+        smoke_errors="${smoke_errors//$'\n'/'%0A'}"
+        echo "::error title=Smoke compile errors::${smoke_errors}"
+      fi
       exit 1
     fi
     COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
