@@ -82,13 +82,15 @@ build_rtl88x2bu_module() {
   # The driver Makefile carries GCC-only warning options; clang (with the
   # kernel's -Werror) rejects them as unknown warning options.
   sed -i '/-Wno-stringop-overread/d' "$src/Makefile"
+  # RHEL88 selects the new cfg80211 API but also the 6.1 napi API, which this 5.15 tree lacks
+  sed -i 's/netif_napi_add_weight(/netif_napi_add(/' "$src/os_dep/linux/os_intfs.c"
 
   # Full module pass first: it creates the Module.symvers entries (cfg80211
   # and friends) the external module is linked against.
   make -j"$(nproc)" "${MAKE_ARGS[@]}" modules 2>&1 | tee wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -DRHEL88 -DRHEL89 -DRTW_CFG80211_TDLS_LINK_ID" modules 2>&1 | tee -a wifi-modules-build.log
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" CONFIG_RTL8822BU=m USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -DRHEL88 -DRHEL89" modules 2>&1 | tee -a wifi-modules-build.log
   if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then
     wifi_errors="$(grep -E 'error:|undefined reference|No rule to make target' wifi-modules-build.log | sed -e 's#/home/runner/work/[^/]*/[^/]*/[^/]*/##g' | head -n 8 | cut -c1-320 || true)"
     [[ -n "$wifi_errors" ]] || wifi_errors="$(tail -n 10 wifi-modules-build.log | cut -c1-320)"
