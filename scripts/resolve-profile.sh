@@ -23,6 +23,7 @@ INPUT_KERNEL_BRANCH="${INPUT_KERNEL_BRANCH:-}"
 INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module checks (default)}"
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
+INPUT_LAZY_RCU="${INPUT_LAZY_RCU:-Keep stock RCU behavior (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
@@ -61,6 +62,15 @@ case "$INPUT_TCP_CONGESTION" in
   "Enable BBR as default (experimental)") TCP_BBR=1 ;;
   *)
     echo "::error::Unknown TCP congestion mode: $INPUT_TCP_CONGESTION"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_LAZY_RCU" in
+  "Keep stock RCU behavior (default)") LAZY_RCU=0 ;;
+  "Enable Lazy RCU (experimental)") LAZY_RCU=1 ;;
+  *)
+    echo "::error::Unknown Lazy RCU mode: $INPUT_LAZY_RCU"
     exit 1
     ;;
 esac
@@ -329,6 +339,7 @@ esac
   echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
+  echo "LAZY_RCU=$LAZY_RCU"
   echo "NETHUNTER=$NETHUNTER"
   echo "BASEBAND_GUARD=$BASEBAND_GUARD"
   echo "DROIDSPACES=$DROIDSPACES"
@@ -419,6 +430,7 @@ esac
   echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
+  echo "- Lazy RCU: $LAZY_RCU"
   echo "- NetHunter options: $NETHUNTER"
   echo "- Baseband-guard: $BASEBAND_GUARD"
   echo "- Droidspaces: $DROIDSPACES"
