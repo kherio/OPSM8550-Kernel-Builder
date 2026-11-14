@@ -265,6 +265,21 @@ apply_tcp_bbr_config() {
   disable_config_values "$config_file" CONFIG_DEFAULT_CUBIC CONFIG_DEFAULT_RENO
 }
 
+# Batches non-urgent RCU callbacks and flushes them after a delay, memory
+# pressure, or a long enough backlog, instead of invoking them right away.
+# Lets the CPU stay idle longer between kernel housekeeping wake-ups. Needs
+# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place);
+# left unset here so olddefconfig can still enable it from the base defconfig.
+# RCU_LAZY_DEFAULT_OFF is intentionally left disabled so laziness is active
+# immediately after boot, with no runtime toggle required.
+apply_lazy_rcu_config() {
+  local config_file="$1"
+
+  [[ "${LAZY_RCU:-0}" == 1 ]] || return 0
+  enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY
+  disable_config_values "$config_file" CONFIG_RCU_LAZY_DEFAULT_OFF
+}
+
 # NetHunter support: USB gadget functions the stock config lacks (RNDIS, OBEX,
 # ECM subset) plus leaf drivers for USB serial, Bluetooth, Ethernet, NFC, CAN
 # and RTL-SDR adapters. Core options must survive olddefconfig; optional ones
@@ -340,6 +355,7 @@ apply_variant_configs() {
   local config_file="$1"
 
   apply_tcp_bbr_config "$config_file"
+  apply_lazy_rcu_config "$config_file"
   apply_nethunter_config "$config_file"
   apply_droidspaces_config "$config_file"
   apply_bbg_config "$config_file"

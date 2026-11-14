@@ -49,6 +49,7 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
+: "${LAZY_RCU:=0}"
 : "${NETHUNTER:=0}"
 : "${BASEBAND_GUARD:=0}"
 : "${DROIDSPACES:=0}"
@@ -236,6 +237,12 @@ if [[ "$TCP_BBR" == 1 ]]; then
     grep -E 'CONFIG_DEFAULT_(TCP_CONG|BBR|CUBIC|RENO)|CONFIG_TCP_CONG' out/.config || true
     exit 1
   }
+fi
+
+if [[ "$LAZY_RCU" == 1 ]]; then
+  require_config_enabled out/.config CONFIG_RCU_NOCB_CPU
+  require_config_enabled out/.config CONFIG_RCU_LAZY
+  require_config_disabled out/.config CONFIG_RCU_LAZY_DEFAULT_OFF
 fi
 
 verify_nethunter_config out/.config nethunter-proof.txt

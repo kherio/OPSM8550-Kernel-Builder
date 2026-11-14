@@ -104,6 +104,14 @@ on:
         options:
           - Keep stock TCP congestion control (default)
           - Enable BBR as default (experimental)
+      lazy_rcu:
+        description: Batches non-urgent RCU callbacks to let the CPU idle longer; off by default
+        required: true
+        type: choice
+        default: Keep stock RCU behavior (default)
+        options:
+          - Keep stock RCU behavior (default)
+          - Enable Lazy RCU (experimental)
       nethunter:
         description: Kali NetHunter kernel support (USB gadget RNDIS/OBEX, USB serial/Bluetooth/Ethernet, NFC, CAN, RTL-SDR); off by default
         required: true
@@ -222,6 +230,7 @@ jobs:
           INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
+          INPUT_LAZY_RCU: ${{ inputs.lazy_rcu }}
           INPUT_NETHUNTER: ${{ inputs.nethunter }}
           INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
           INPUT_DROIDSPACES: ${{ inputs.droidspaces }}
