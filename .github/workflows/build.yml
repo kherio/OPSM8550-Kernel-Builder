@@ -443,7 +443,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ needs.reserve_release_tag.outputs.release_tag }}
-      RELEASE_NAME: ${{ inputs.build_profile }} | ${{ inputs.root_solution }} | r${{ github.run_number }}.${{ github.run_attempt }}
+      RELEASE_NAME: ${{ inputs.build_profile }} | ${{ inputs.root_solution }}${{ inputs.nethunter == 'Add NetHunter USB/Bluetooth/NFC/CAN/SDR support (experimental)' && ' | NetHunter' || '' }} | r${{ github.run_number }}.${{ github.run_attempt }}
 
     steps:
       - name: Download verified build outputs
