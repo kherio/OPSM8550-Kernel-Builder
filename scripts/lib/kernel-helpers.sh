@@ -280,6 +280,20 @@ apply_lazy_rcu_config() {
   disable_config_values "$config_file" CONFIG_RCU_LAZY_DEFAULT_OFF
 }
 
+# Makes per-cpu workqueues unbound by default (workqueue.power_efficient=1),
+# trading a small amount of performance overhead for lower power use: per-cpu
+# workqueues were observed to contribute significantly to power consumption by
+# waking cores that would otherwise stay idle. Off by default upstream and in
+# every kernel we've compared against (crDroid's own gki_defconfig, and a
+# built EmberHeart_OnePlus11 release), so nobody else is relying on the
+# per-cpu-only behavior for this device either.
+apply_wq_power_efficient_config() {
+  local config_file="$1"
+
+  [[ "${WQ_POWER_EFFICIENT:-0}" == 1 ]] || return 0
+  enable_config_values "$config_file" CONFIG_WQ_POWER_EFFICIENT_DEFAULT
+}
+
 # NetHunter support: USB gadget functions the stock config lacks (RNDIS, OBEX,
 # ECM subset) plus leaf drivers for USB serial, Bluetooth, Ethernet, NFC, CAN
 # and RTL-SDR adapters. Core options must survive olddefconfig; optional ones
@@ -356,6 +370,7 @@ apply_variant_configs() {
 
   apply_tcp_bbr_config "$config_file"
   apply_lazy_rcu_config "$config_file"
+  apply_wq_power_efficient_config "$config_file"
   apply_nethunter_config "$config_file"
   apply_droidspaces_config "$config_file"
   apply_bbg_config "$config_file"

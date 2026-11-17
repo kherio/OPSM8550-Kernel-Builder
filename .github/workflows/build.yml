@@ -112,6 +112,14 @@ on:
         options:
           - Keep stock RCU behavior (default)
           - Enable Lazy RCU (experimental)
+      wq_power_efficient:
+        description: Makes per-cpu workqueues unbound by default (workqueue.power_efficient=1), trading a little performance for lower power use; off by default
+        required: true
+        type: choice
+        default: Keep per-cpu workqueues (default)
+        options:
+          - Keep per-cpu workqueues (default)
+          - Make workqueues power-efficient by default (experimental)
       nethunter:
         description: Kali NetHunter kernel support (USB gadget RNDIS/OBEX, USB serial/Bluetooth/Ethernet, NFC, CAN, RTL-SDR); off by default
         required: true
@@ -231,6 +239,7 @@ jobs:
           INPUT_SUSFS_LOGGING: ${{ inputs.susfs_logging }}
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
           INPUT_LAZY_RCU: ${{ inputs.lazy_rcu }}
+          INPUT_WQ_POWER_EFFICIENT: ${{ inputs.wq_power_efficient }}
           INPUT_NETHUNTER: ${{ inputs.nethunter }}
           INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
           INPUT_DROIDSPACES: ${{ inputs.droidspaces }}

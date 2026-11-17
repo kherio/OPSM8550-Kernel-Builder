@@ -50,6 +50,7 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
 : "${LAZY_RCU:=0}"
+: "${WQ_POWER_EFFICIENT:=0}"
 : "${NETHUNTER:=0}"
 : "${BASEBAND_GUARD:=0}"
 : "${DROIDSPACES:=0}"
@@ -243,6 +244,10 @@ if [[ "$LAZY_RCU" == 1 ]]; then
   require_config_enabled out/.config CONFIG_RCU_NOCB_CPU
   require_config_enabled out/.config CONFIG_RCU_LAZY
   require_config_disabled out/.config CONFIG_RCU_LAZY_DEFAULT_OFF
+fi
+
+if [[ "$WQ_POWER_EFFICIENT" == 1 ]]; then
+  require_config_enabled out/.config CONFIG_WQ_POWER_EFFICIENT_DEFAULT
 fi
 
 verify_nethunter_config out/.config nethunter-proof.txt
