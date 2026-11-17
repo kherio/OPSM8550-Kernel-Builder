@@ -125,6 +125,12 @@ KBUILD_BUILD_TIMESTAMP="$(date -u -d "@${SOURCE_DATE_EPOCH}" '+%Y-%m-%d %H:%M:%S
 export KBUILD_BUILD_USER=opskernel
 export KBUILD_BUILD_HOST=github-actions
 
+# Leave one CPU free for the runner's own housekeeping (log shipping, the
+# Actions agent, swap management) instead of saturating every core with
+# compiler jobs. Cheap insurance against the runner being starved right when
+# it most needs to talk to the Actions service.
+BUILD_JOBS="$(($(nproc) > 1 ? $(nproc) - 1 : 1))"
+
 # Command-line assignments take precedence over Kbuild's own CC/HOSTCC values.
 # Exporting CC alone is not sufficient when LLVM=1 because the kernel Makefile
 # assigns CC=clang internally.
@@ -377,12 +383,12 @@ if [[ "$BUILD_MODE" == "Patch/config validation only" ]]; then
     COMPILE_STARTED_AT="$(date +%s)"
     # A partial driver build does not visit the directories that generate
     # compile.h and the SELinux flask/permission headers used by KernelSU.
-    if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" init/ security/selinux/; then
+    if ! make -j"$BUILD_JOBS" "${MAKE_ARGS[@]}" init/ security/selinux/; then
       COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
       echo '::error::KernelSU generated-header preparation failed.'
       exit 1
     fi
-    if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" "${SMOKE_TARGETS[@]}" 2>&1 | tee integration-smoke.log; then
+    if ! make -j"$BUILD_JOBS" "${MAKE_ARGS[@]}" "${SMOKE_TARGETS[@]}" 2>&1 | tee integration-smoke.log; then
       COMPILE_SECONDS=$((COMPILE_SECONDS + $(date +%s) - COMPILE_STARTED_AT))
       echo "::error::KernelSU/SUSFS/NoMount/ZeroMount/KPM integration object smoke compile failed."
       # Surface the first compiler errors as an annotation so they are visible
@@ -431,7 +437,7 @@ COMPILE_STARTED_AT="$(date +%s)"
   done
 ) &
 BUILD_RESOURCE_MONITOR_PID=$!
-if ! make -j"$(nproc)" "${MAKE_ARGS[@]}" Image 2>&1 | tee build.log; then
+if ! make -j"$BUILD_JOBS" "${MAKE_ARGS[@]}" Image 2>&1 | tee build.log; then
   COMPILE_SECONDS=$(($(date +%s) - COMPILE_STARTED_AT))
   ccache --show-stats || true
   echo "==== BUILD ERROR SUMMARY ===="
