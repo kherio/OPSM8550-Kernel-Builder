@@ -101,7 +101,7 @@ on:
         description: Batches non-urgent RCU callbacks to let the CPU idle longer; off by default
         required: true
         type: choice
-        default: Keep stock RCU behavior (default)
+        default: Enable Lazy RCU (experimental)
         options:
           - Keep stock RCU behavior (default)
           - Enable Lazy RCU (experimental)
@@ -109,7 +109,7 @@ on:
         description: Makes per-cpu workqueues unbound by default (workqueue.power_efficient=1), trading a little performance for lower power use; off by default
         required: true
         type: choice
-        default: Keep per-cpu workqueues (default)
+        default: Make workqueues power-efficient by default (experimental)
         options:
           - Keep per-cpu workqueues (default)
           - Make workqueues power-efficient by default (experimental)
@@ -117,7 +117,7 @@ on:
         description: Turns off KFENCE heap-bug sampling (CONFIG_KFENCE_SAMPLE_INTERVAL=0), whose 500 ms timer wakes idle CPUs; off by default (KFENCE stays active)
         required: true
         type: choice
-        default: Keep KFENCE sampling (default)
+        default: Disable KFENCE sampling (experimental)
         options:
           - Keep KFENCE sampling (default)
           - Disable KFENCE sampling (experimental)
