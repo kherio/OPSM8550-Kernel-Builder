@@ -222,16 +222,6 @@ enable_ksu_common_configs() {
   enable_config_values "$config_file" CONFIG_TMPFS_XATTR
 }
 
-# A boot-only custom Image has a newly generated module signing key and cannot
-# authenticate protected GKI modules retained in the ROM's system_dlkm. This
-# opt-in mode allows those modules through the protected-symbol check. Their
-# signatures still cannot be authenticated with the new Image's key.
-apply_rom_gki_module_compat_config() {
-  local config_file="$1"
-  [[ "${ROM_GKI_MODULE_COMPAT:-0}" == 1 ]] || return 0
-  disable_config_values "$config_file" CONFIG_MODULE_SIG_PROTECT
-}
-
 write_kernel_scmversion() {
   local kernel_commit="$1"
   local destination="${2:-.scmversion}"
@@ -255,6 +245,26 @@ verify_kernel_release_identity() {
   }
 }
 
+# crDroid's own gki_defconfig ships CONFIG_LTO_CLANG_FULL=y. Full LTO's own
+# Kconfig help text warns it "can use a large amount of RAM, and may take
+# much longer than the ThinLTO option" during the final link -- which is
+# exactly the resource-hungry single-threaded step this pipeline has had to
+# build a 32 GB swapfile around. ThinLTO parallelizes that link and keeps
+# peak memory far lower, at a negligible runtime cost; upstream's own text
+# says "If unsure, say Y". A real OnePlus 11 release kernel for this exact
+# device (EmberHeart) already ships CONFIG_LTO_CLANG_THIN=y instead of Full,
+# so this isn't an unproven swap. Left out of the "No root changes" preset so
+# that preset still means exactly what it says -- a config untouched beyond
+# what KSU_TYPE requires -- but applied to every build that already asks for
+# a root solution, since those get no such byte-for-byte guarantee anyway.
+apply_thin_lto_config() {
+  local config_file="$1"
+
+  [[ "$KSU_TYPE" != "None" ]] || return 0
+  disable_config_values "$config_file" CONFIG_LTO_CLANG_FULL
+  enable_config_values "$config_file" CONFIG_LTO_CLANG_THIN
+}
+
 # Builds BBR in and makes it the default congestion control. The default queue
 # discipline is left alone: BBR paces internally, and fq stays available.
 apply_tcp_bbr_config() {
@@ -268,8 +278,10 @@ apply_tcp_bbr_config() {
 # Batches non-urgent RCU callbacks and flushes them after a delay, memory
 # pressure, or a long enough backlog, instead of invoking them right away.
 # Lets the CPU stay idle longer between kernel housekeeping wake-ups. Needs
-# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place);
-# left unset here so olddefconfig can still enable it from the base defconfig.
+# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place).
+# The lazy delays only apply to CPUs whose callbacks are offloaded, i.e. those
+# listed in the rcu_nocbs= boot parameter. This 5.15 kernel has no
+# RCU_NOCB_CPU_DEFAULT_ALL symbol, so offloading has to come from the cmdline.
 # RCU_LAZY_DEFAULT_OFF is intentionally left disabled so laziness is active
 # immediately after boot, with no runtime toggle required.
 apply_lazy_rcu_config() {
@@ -278,6 +290,32 @@ apply_lazy_rcu_config() {
   [[ "${LAZY_RCU:-0}" == 1 ]] || return 0
   enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY
   disable_config_values "$config_file" CONFIG_RCU_LAZY_DEFAULT_OFF
+}
+
+# Makes per-cpu workqueues unbound by default (workqueue.power_efficient=1),
+# trading a small amount of performance overhead for lower power use: per-cpu
+# workqueues were observed to contribute significantly to power consumption by
+# waking cores that would otherwise stay idle. Off by default upstream and in
+# every kernel we've compared against (crDroid's own gki_defconfig, and a
+# built EmberHeart_OnePlus11 release), so nobody else is relying on the
+# per-cpu-only behavior for this device either.
+apply_wq_power_efficient_config() {
+  local config_file="$1"
+
+  [[ "${WQ_POWER_EFFICIENT:-0}" == 1 ]] || return 0
+  enable_config_values "$config_file" CONFIG_WQ_POWER_EFFICIENT_DEFAULT
+}
+
+# KFENCE (a sampling heap-bug detector) arms a timer every
+# CONFIG_KFENCE_SAMPLE_INTERVAL ms, which wakes idle CPUs; Google briefly
+# disabled it in GKI for an idle-power regression. An interval of 0 keeps the
+# code compiled (no ABI change) but leaves KFENCE off unless a kfence.sample_interval
+# boot parameter turns it on again.
+apply_kfence_off_config() {
+  local config_file="$1"
+
+  [[ "${KFENCE_OFF:-0}" == 1 ]] || return 0
+  set_config_value "$config_file" CONFIG_KFENCE_SAMPLE_INTERVAL 0
 }
 
 # NetHunter support: USB gadget functions the stock config lacks (RNDIS, OBEX,
@@ -354,8 +392,11 @@ verify_nethunter_config() {
 apply_variant_configs() {
   local config_file="$1"
 
+  apply_thin_lto_config "$config_file"
   apply_tcp_bbr_config "$config_file"
   apply_lazy_rcu_config "$config_file"
+  apply_wq_power_efficient_config "$config_file"
+  apply_kfence_off_config "$config_file"
   apply_nethunter_config "$config_file"
   apply_droidspaces_config "$config_file"
   apply_bbg_config "$config_file"

@@ -34,11 +34,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SUPPORTED_ANDROID_VERSIONS="${SUPPORTED_ANDROID_VERSIONS:-}"
 KERNEL_MAKE_FLAGS="${KERNEL_MAKE_FLAGS:-}"
-ROM_GKI_MODULE_COMPAT="${ROM_GKI_MODULE_COMPAT:-0}"
-case "$ROM_GKI_MODULE_COMPAT" in
-  0|1) ;;
-  *) echo "::error::Invalid ROM GKI module compatibility value: $ROM_GKI_MODULE_COMPAT"; exit 1 ;;
-esac
 KSU_COMMIT="${KSU_COMMIT:-}"
 KSU_REPO="${KSU_REPO:-}"
 KSU_REF="${KSU_REF:-}"
@@ -62,14 +57,10 @@ MAGISK_TOOLS_VERSION="${MAGISK_TOOLS_VERSION:-30.7}"
 MAGISK_APK_URL="${MAGISK_APK_URL:-https://github.com/topjohnwu/Magisk/releases/download/v30.7/Magisk-v30.7.apk}"
 MAGISK_APK_SHA256="${MAGISK_APK_SHA256:-e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5}"
 MAGISKBOOT_ARM64_SHA256="${MAGISKBOOT_ARM64_SHA256:-d7440e2cd89899426e809554bf793baef9804ccbe5a52ce34a8b6242725d3c77}"
-MAGISK_BUSYBOX_ARM64_SHA256="${MAGISK_BUSYBOX_ARM64_SHA256:-4d60ab3f5a59ebb2ca863f2f514e6924401b581e9b64f602665c008177626651}"
 MAGISK_APK_PATH="${MAGISK_APK_PATH:-}"
 
 SHORT_KERNEL_COMMIT="${KERNEL_COMMIT:0:12}"
 ZIP_NAME="${PROFILE_ID}_${KSU_TYPE}_${SHORT_KERNEL_COMMIT}_${BUILD_TIMESTAMP}"
-if [[ "$ROM_GKI_MODULE_COMPAT" == 1 ]]; then
-  ZIP_NAME="${ZIP_NAME}_rom-gki-compat"
-fi
 if [[ "${NETHUNTER:-0}" == 1 ]]; then
   ZIP_NAME="${ZIP_NAME}_nethunter"
 fi
@@ -146,18 +137,6 @@ if [[ "$KPM_ENABLED" == true ]]; then
   prepare_anykernel_arm64_toolset "AnyKernel3/tools"
   ANYKERNEL_BUSYBOX_ABI="arm64"
   ARM64_TOOLSET_REQUIRED=true
-elif [[ "$PROFILE_ID" == sm8650-oneplus12-crdroid ]]; then
-  install_anykernel_arm64_magiskboot \
-    "$MAGISK_APK_URL" \
-    "$MAGISK_APK_SHA256" \
-    "$MAGISKBOOT_ARM64_SHA256" \
-    "AnyKernel3/tools/magiskboot" \
-    "$MAGISK_APK_PATH" \
-    "AnyKernel3/tools/busybox" \
-    "$MAGISK_BUSYBOX_ARM64_SHA256"
-  prepare_anykernel_arm64_toolset "AnyKernel3/tools"
-  ANYKERNEL_BUSYBOX_ABI="arm64"
-  ARM64_TOOLSET_REQUIRED=true
 fi
 ANYKERNEL_BUSYBOX_SHA256="$(sha256sum AnyKernel3/tools/busybox | awk '{print $1}')"
 ANYKERNEL_MAGISKBOOT_SHA256="$(sha256sum AnyKernel3/tools/magiskboot | awk '{print $1}')"
@@ -183,7 +162,6 @@ jq -n \
   --arg modules_commit "$MODULES_COMMIT" \
   --arg clang "$CLANG_VERSION" \
   --arg kernel_make_flags "$KERNEL_MAKE_FLAGS" \
-  --argjson rom_gki_module_compat "$([[ "$ROM_GKI_MODULE_COMPAT" == 1 ]] && echo true || echo false)" \
   --arg root_solution "$KSU_TYPE" \
   --argjson kpm_enabled "$KPM_ENABLED" \
   --arg kpm_patch_version "$([[ "$KPM_ENABLED" == true ]] && echo "$KPM_PATCH_VERSION" || true)" \
@@ -227,7 +205,6 @@ jq -n \
     modules_commit: $modules_commit,
     clang: $clang,
     device_kernel_make_flags: ($kernel_make_flags | split(" ") | map(select(length > 0))),
-    rom_gki_module_compat: $rom_gki_module_compat,
     root_solution: $root_solution,
     kpm_enabled: $kpm_enabled,
     kpm_patch_version: $kpm_patch_version,
@@ -297,7 +274,6 @@ cat > "$ASSET_DIR/release-notes.md" <<EOF_NOTES
 - Modules commit: \`${MODULES_COMMIT}\`
 - Clang: ${CLANG_VERSION}
 - Device kernel make flags: ${KERNEL_MAKE_FLAGS:-none}
-- ROM GKI module compatibility: ${ROM_GKI_MODULE_COMPAT}
 - Root solution: ${KSU_TYPE}
 - KernelSU source: ${KSU_REPO:-disabled} (${KSU_REF:-none}, ${KSU_COMMIT:-none})
 - KernelSU UAPI backport: ${KSU_UAPI_VERSION:-none} (patch SHA-256: ${KSU_UAPI_PATCH_SHA256:-none})
@@ -313,7 +289,6 @@ The flashable ZIP performs a device-codename check before modifying the boot par
 Only flash it on the listed target devices, and keep a known-good stock boot image available.
 This package replaces only the kernel Image; it does not replace the ROM's system_dlkm or vendor_dlkm modules.
 Use it only with a ROM build whose vendor modules match the source, branch, and device flags above.
-When ROM GKI module compatibility is enabled, protected-symbol enforcement is disabled so the ROM's system_dlkm modules may load with this custom Image. Their signatures cannot be authenticated by this Image's newly generated key. This is experimental and reduces GKI module protection.
 See \`build-info.json\` and \`SHA256SUMS\` for provenance and integrity data.
 EOF_NOTES
 

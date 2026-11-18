@@ -20,10 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${GITHUB_STEP_SUMMARY:?}"
 
 INPUT_KERNEL_BRANCH="${INPUT_KERNEL_BRANCH:-}"
-INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module checks (default)}"
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_LAZY_RCU="${INPUT_LAZY_RCU:-Keep stock RCU behavior (default)}"
+INPUT_WQ_POWER_EFFICIENT="${INPUT_WQ_POWER_EFFICIENT:-Keep per-cpu workqueues (default)}"
+INPUT_KFENCE_SAMPLING="${INPUT_KFENCE_SAMPLING:-Keep KFENCE sampling (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
@@ -32,21 +33,6 @@ INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Off (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
-
-case "$INPUT_ROM_GKI_MODULE_COMPAT" in
-  "Strict GKI module checks (default)") ROM_GKI_MODULE_COMPAT=0 ;;
-  "Use existing ROM system_dlkm modules (experimental)")
-    if [[ "$PROFILE_ID" != sm8650-oneplus12-crdroid ]]; then
-      echo "::error::ROM GKI module compatibility mode is currently validated only for the OnePlus 12 crDroid profile."
-      exit 1
-    fi
-    ROM_GKI_MODULE_COMPAT=1
-    ;;
-  *)
-    echo "::error::Unknown ROM GKI module compatibility mode: $INPUT_ROM_GKI_MODULE_COMPAT"
-    exit 1
-    ;;
-esac
 
 case "$INPUT_ROOT_HIDING_FIXES" in
   "Keep stock kernel code (default)") ROOT_HIDING_FIXES=0 ;;
@@ -71,6 +57,24 @@ case "$INPUT_LAZY_RCU" in
   "Enable Lazy RCU (experimental)") LAZY_RCU=1 ;;
   *)
     echo "::error::Unknown Lazy RCU mode: $INPUT_LAZY_RCU"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_WQ_POWER_EFFICIENT" in
+  "Keep per-cpu workqueues (default)") WQ_POWER_EFFICIENT=0 ;;
+  "Make workqueues power-efficient by default (experimental)") WQ_POWER_EFFICIENT=1 ;;
+  *)
+    echo "::error::Unknown workqueue power-efficient mode: $INPUT_WQ_POWER_EFFICIENT"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_KFENCE_SAMPLING" in
+  "Keep KFENCE sampling (default)") KFENCE_OFF=0 ;;
+  "Disable KFENCE sampling (experimental)") KFENCE_OFF=1 ;;
+  *)
+    echo "::error::Unknown KFENCE sampling mode: $INPUT_KFENCE_SAMPLING"
     exit 1
     ;;
 esac
@@ -138,7 +142,7 @@ else
   DEFAULT_MODULES_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_oneplus_${UPSTREAM_SOC}-modules.git"
   KERNEL_CLONE_DIR="${SOC}"
   # Vendor kernel symlinks point to the upstream repository stem, which can
-  # intentionally differ from the marketed SoC (Nord CE4: sm7550 -> sm8550).
+  # intentionally differ from the marketed SoC.
   MODULES_CLONE_DIR="${UPSTREAM_SOC}-modules"
 fi
 KERNEL_REPO="${KERNEL_REPO_OVERRIDE:-$DEFAULT_KERNEL_REPO}"
@@ -302,21 +306,13 @@ case "$KERNEL_SOURCE" in
     [[ "$KERNEL_BRANCH" =~ ^oneplus[/_] ]] \
       || echo "::warning::OnePlus official source usually uses oneplus/* branches; selected '$KERNEL_BRANCH'."
     ;;
-  LineageOS|lineage-ovaltine-dev)
+  LineageOS)
     [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
       || echo "::warning::Lineage-style source usually uses lineage-* branches; selected '$KERNEL_BRANCH'."
     ;;
   LunarisOS)
     [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
       || echo "::warning::LunarisOS OnePlus 11 source usually uses a lineage-* kernel branch; selected '$KERNEL_BRANCH'."
-    ;;
-  OnePlus12R-development)
-    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* ]] \
-      || echo "::warning::Unexpected OnePlus 12R development branch: '$KERNEL_BRANCH'."
-    ;;
-  OnePlus-Nord-CE4-development)
-    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* || "$KERNEL_BRANCH" == seventeen* ]] \
-      || echo "::warning::Unexpected OnePlus Nord CE4 development branch: '$KERNEL_BRANCH'."
     ;;
   crdroidandroid)
     echo "Note: crDroid branch naming may differ from LineageOS."
@@ -336,10 +332,11 @@ esac
   echo "PLATFORM_NAME=$PLATFORM_NAME"
   echo "BUILD_CONFIGS=$BUILD_CONFIGS"
   echo "KERNEL_MAKE_FLAGS=$KERNEL_MAKE_FLAGS"
-  echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
   echo "LAZY_RCU=$LAZY_RCU"
+  echo "WQ_POWER_EFFICIENT=$WQ_POWER_EFFICIENT"
+  echo "KFENCE_OFF=$KFENCE_OFF"
   echo "NETHUNTER=$NETHUNTER"
   echo "BASEBAND_GUARD=$BASEBAND_GUARD"
   echo "DROIDSPACES=$DROIDSPACES"
@@ -400,7 +397,6 @@ esac
   echo "modules_commit=$MODULES_COMMIT"
   echo "clang_version=$CLANG_VERSION"
   echo "ksu_type=$KSU_TYPE"
-  echo "rom_gki_module_compat=$ROM_GKI_MODULE_COMPAT"
   echo "ksu_commit=$KSU_COMMIT"
   echo "susfs_ref=$SUSFS_REF"
   echo "susfs_commit=$SUSFS_COMMIT"
@@ -427,10 +423,11 @@ esac
     echo "- Device make flags: $KERNEL_MAKE_FLAGS"
   fi
   echo "- Root solution: $KSU_TYPE"
-  echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
   echo "- Lazy RCU: $LAZY_RCU"
+  echo "- Power-efficient workqueues: $WQ_POWER_EFFICIENT"
+  echo "- KFENCE sampling disabled: $KFENCE_OFF"
   echo "- NetHunter options: $NETHUNTER"
   echo "- Baseband-guard: $BASEBAND_GUARD"
   echo "- Droidspaces: $DROIDSPACES"

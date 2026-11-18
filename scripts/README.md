@@ -101,7 +101,7 @@ against property/cmdline/bootconfig fixtures and rejects invalid or absent slots
 The scheduled upstream-health workflow resolves
 every profile and runs a matrix covering KernelSU-Next + SUSFS + NoMount, the combined
 SukiSU Ultra + SUSFS + NoMount + KPM preset, and BakaSU + SUSFS + NoMount on
-representative SM7550, SM8450, SM8550 (including crDroid), and SM8650 sources,
+the OnePlus 11 / 12R LineageOS and crDroid sources,
 including targeted
 integration object compilation and a LunarisOS OnePlus 11 baseline smoke test.
 

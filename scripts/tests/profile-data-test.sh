@@ -16,6 +16,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/../lib/susfs-apply.sh"
 # shellcheck source=../lib/kernel-helpers.sh
 . "${SCRIPT_DIR}/../lib/kernel-helpers.sh"
+# shellcheck source=../lib/bbg-setup.sh
+. "${SCRIPT_DIR}/../lib/bbg-setup.sh"
+# shellcheck source=../lib/droidspaces-setup.sh
+. "${SCRIPT_DIR}/../lib/droidspaces-setup.sh"
 # shellcheck source=../lib/verify.sh
 . "${SCRIPT_DIR}/../lib/verify.sh"
 
@@ -33,7 +37,7 @@ assert_eq() {
 
 profiles=()
 mapfile -t profiles < <(list_build_profiles)
-assert_eq "12" "${#profiles[@]}" "profile count"
+assert_eq "4" "${#profiles[@]}" "profile count"
 
 WORKFLOW_FILE="${SCRIPT_DIR}/../../.github/workflows/build.yml"
 UPSTREAM_HEALTH_WORKFLOW="${SCRIPT_DIR}/../../.github/workflows/upstream-health.yml"
@@ -55,8 +59,8 @@ done
 kernel_branch_input="$(sed -n '/^      kernel_branch:/,/^      clang_choice:/p' "$WORKFLOW_FILE")"
 grep -Fq 'type: choice' <<< "$kernel_branch_input" \
   || fail "manual kernel branch input must be a choice"
-grep -Fq -- '- "16.0"' <<< "$kernel_branch_input" \
-  || fail "manual kernel branch choices must include crDroid 16.0"
+grep -Fq -- '- lineage-24.0' <<< "$kernel_branch_input" \
+  || fail "manual kernel branch choices must include LineageOS Android 17 (lineage-24.0)"
 grep -Fq -- '- "17.0"' <<< "$kernel_branch_input" \
   || fail "manual kernel branch choices must include crDroid 13 / Android 17"
 grep -Fq -- '- clang-r584948 (Android 17 / crDroid 13 era)' "$WORKFLOW_FILE" \
@@ -124,22 +128,12 @@ grep -Fq 'git checkout -q --force --detach FETCH_HEAD' "$ANYKERNEL_PACKAGE_SCRIP
 if grep -Fq 'Kernel-SU/AnyKernel3.git' "$RESOLVER_SCRIPT"; then
   fail "resolver still references the removed Kernel-SU AnyKernel3 fork"
 fi
-grep -Fq 'profile: SM8650 | OnePlus 12 | crDroid' "$UPSTREAM_HEALTH_WORKFLOW" \
-  || fail "upstream health must exercise the crDroid SM8650 certificate compatibility path"
-grep -Fq 'integration: SukiSU Ultra + SUSFS + NoMount + KPM (experimental)' "$UPSTREAM_HEALTH_WORKFLOW" \
+grep -Fq -- '- SukiSU Ultra + SUSFS + NoMount + KPM (experimental)' "$UPSTREAM_HEALTH_WORKFLOW" \
   || fail "upstream health must exercise the featured KPM integration"
-awk '
-  /integration: SukiSU Ultra \+ SUSFS \+ NoMount \+ KPM \(experimental\)/ { kpm = 1; next }
-  kpm && /profile: SM8650 \| OnePlus 12 \| crDroid/ { found = 1; exit }
-  kpm && /integration:/ { kpm = 0 }
-  END { exit !found }
-' "$UPSTREAM_HEALTH_WORKFLOW" \
-  || fail "upstream health must exercise KPM on the crDroid OnePlus 12 source"
-
-expected_socs=(sm7550 sm7550 sm8450 sm8450 sm8550 sm8550 sm8550 sm8550 sm8550 sm8650 sm8650 sm8650)
-expected_upstream_socs=(sm8550 sm8550 sm8450 sm8450 sm8550 sm8550 sm8550 sm8550 sm8550 sm8650 sm8650 sm8650)
-expected_codenames=(benz benz negroni ovaltine salami salami "salami aston astonc" "salami aston astonc" "aston astonc" waffle waffle waffle)
-expected_devices=("benz OP5D3FL1 CPH2613" "benz OP5D3FL1 CPH2613" "negroni OP516EL1 OP516FL1" "ovaltine OP5551L1 OP5552L1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "aston OP5D35L1 astonc OP5CF9L1" "waffle OP5929L1 OP595DL1" "waffle OP5929L1 OP595DL1" "waffle OP5929L1 OP595DL1")
+expected_socs=(sm8550 sm8550 sm8550 sm8550)
+expected_upstream_socs=(sm8550 sm8550 sm8550 sm8550)
+expected_codenames=(salami salami "salami aston astonc" "salami aston astonc")
+expected_devices=("salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1")
 
 for i in "${!profiles[@]}"; do
   resolve_build_profile "${profiles[$i]}"
@@ -151,17 +145,6 @@ for i in "${!profiles[@]}"; do
     || fail "${profiles[$i]} did not resolve all required metadata"
 done
 
-resolve_build_profile "SM7550 | OnePlus Nord CE4 | development"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y" "$KERNEL_MAKE_FLAGS" "Nord CE4 development make flags"
-resolve_build_profile "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)"
-assert_eq "crdroidandroid" "$KERNEL_SOURCE" "Nord CE4 crDroid kernel source"
-assert_eq "sm8550" "$UPSTREAM_SOC" "Nord CE4 crDroid upstream repository SoC"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y" "$KERNEL_MAKE_FLAGS" "Nord CE4 crDroid make flags"
-
-resolve_build_profile "SM8650 | OnePlus 12 | LineageOS (recommended)"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y" "$KERNEL_MAKE_FLAGS" "OnePlus 12 LineageOS make flags"
-resolve_build_profile "SM8650 | OnePlus 12 | crDroid"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y" "$KERNEL_MAKE_FLAGS" "OnePlus 12 crDroid make flags"
 resolve_build_profile "SM8550 | OnePlus 11 / 12R | crDroid"
 assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_SALAMI_DTB=y CONFIG_ASTON_DTB=y" \
   "$KERNEL_MAKE_FLAGS" "OnePlus 11 / 12R crDroid make flags"
@@ -173,10 +156,6 @@ grep -Fq "out/Module.symvers" "$WORKFLOW_FILE" \
   || fail "diagnostics do not retain the kernel module CRC table"
 grep -Fq "it does not replace the ROM's system_dlkm or vendor_dlkm modules" "$ANYKERNEL_PACKAGE_SCRIPT" \
   || fail "release notes do not warn about the retained ROM modules"
-grep -Fq 'INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}' "$WORKFLOW_FILE" \
-  || fail "workflow does not pass the selected ROM GKI module compatibility mode"
-grep -Fq 'rom_gki_module_compat: $rom_gki_module_compat' "$ANYKERNEL_PACKAGE_SCRIPT" \
-  || fail "package provenance does not record ROM GKI module compatibility"
 
 resolve_build_profile "SM8550 | OnePlus 11 | LunarisOS"
 assert_eq "https://github.com/osm1019/kernel_oneplus_sm8550.git" "$KERNEL_REPO_OVERRIDE" "LunarisOS kernel repository"
@@ -378,18 +357,10 @@ resolve_susfs_settings sm8550 lineage-20.0
 assert_eq "gki-android13-5.15" "$SUSFS_REF" "Android 13 susfs"
 resolve_susfs_settings sm8550 lineage-23.2
 assert_eq "gki-android14-5.15" "$SUSFS_REF" "Android 16 susfs"
-resolve_susfs_settings sm7550 lineage-23.0
-assert_eq "gki-android14-5.15" "$SUSFS_REF" "Nord CE4 susfs"
-for crdroid_soc in sm7550 sm8550 sm8650; do
-  resolve_susfs_settings "$crdroid_soc" 17.0
-  if [[ "$crdroid_soc" == sm8650 ]]; then
-    assert_eq "gki-android14-6.1" "$SUSFS_REF" "crDroid 13 OnePlus 12 GKI base"
-  else
-    assert_eq "gki-android14-5.15" "$SUSFS_REF" "crDroid 13 $crdroid_soc GKI base"
-  fi
-  [[ "$(zeromount_patch_sha256 "${SUSFS_REF#gki-}")" =~ ^[0-9a-f]{64}$ ]] \
-    || fail "crDroid 13 $crdroid_soc ZeroMount patch mapping"
-done
+resolve_susfs_settings sm8550 17.0
+assert_eq "gki-android14-5.15" "$SUSFS_REF" "crDroid 13 sm8550 GKI base"
+[[ "$(zeromount_patch_sha256 "${SUSFS_REF#gki-}")" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "crDroid 13 sm8550 ZeroMount patch mapping"
 assert_eq "7b08b969e3577d282b352a267cb343b02b707d2a" \
   "$(su_session_compatible_susfs_commit gki-android13-5.10)" "SukiSU Android 13 5.10 SUSFS pin"
 assert_eq "adaef1c599e770707311ad36b015a0de3f30ac28" \
@@ -420,6 +391,28 @@ KSUN_NOMOUNT_CONFIG_FIXTURE="$(mktemp)"
 ZEROMOUNT_CONFIG_FIXTURE="$(mktemp)"
 ZEROMOUNT_FIXTURE_DIR="$(mktemp -d)"
 MODULE_CONFIG_FIXTURE="$(mktemp)"
+POWER_CONFIG_FIXTURE="$(mktemp)"
+printf '%s\n' 'CONFIG_RCU_NOCB_CPU=y' 'CONFIG_KFENCE=y' 'CONFIG_KFENCE_SAMPLE_INTERVAL=500' > "$POWER_CONFIG_FIXTURE"
+KFENCE_OFF=0 apply_kfence_off_config "$POWER_CONFIG_FIXTURE"
+grep -Fqx 'CONFIG_KFENCE_SAMPLE_INTERVAL=500' "$POWER_CONFIG_FIXTURE" \
+  || fail "KFENCE must keep its sampling interval when the option is off"
+KFENCE_OFF=1 apply_kfence_off_config "$POWER_CONFIG_FIXTURE"
+grep -Fqx 'CONFIG_KFENCE_SAMPLE_INTERVAL=0' "$POWER_CONFIG_FIXTURE" \
+  || fail "kfence_sampling did not set the sample interval to 0"
+grep -Fqx 'CONFIG_KFENCE=y' "$POWER_CONFIG_FIXTURE" \
+  || fail "kfence_sampling must keep KFENCE compiled in"
+LAZY_RCU=0 apply_lazy_rcu_config "$POWER_CONFIG_FIXTURE"
+if grep -Fq 'CONFIG_RCU_LAZY' "$POWER_CONFIG_FIXTURE"; then
+  fail "lazy_rcu changed the config while disabled"
+fi
+LAZY_RCU=1 apply_lazy_rcu_config "$POWER_CONFIG_FIXTURE"
+for lazy_key in CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY; do
+  grep -Fqx "${lazy_key}=y" "$POWER_CONFIG_FIXTURE" \
+    || fail "lazy_rcu did not enable ${lazy_key}"
+done
+grep -Fqx '# CONFIG_RCU_LAZY_DEFAULT_OFF is not set' "$POWER_CONFIG_FIXTURE" \
+  || fail "lazy_rcu must keep RCU_LAZY_DEFAULT_OFF disabled"
+rm -f "$POWER_CONFIG_FIXTURE"
 SCMVERSION_FIXTURE="$(mktemp)"
 KPM_VERIFY_FIXTURE="$(mktemp -d)"
 NOMOUNT_FIXTURE_DIR="$(mktemp -d)"
@@ -539,10 +532,8 @@ for expected_field in \
     || fail "FinaSU resolver missing $expected_field"
 done
 
-for crdroid_profile in \
-  "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)" \
-  "SM8550 | OnePlus 11 / 12R | crDroid" \
-  "SM8650 | OnePlus 12 | crDroid"; do
+crdroid_profiles=("SM8550 | OnePlus 11 / 12R | crDroid")
+for crdroid_profile in "${crdroid_profiles[@]}"; do
   resolve_build_profile "$crdroid_profile"
   for resolver_case in automatic-17 manual-17 manual-16; do
     resolver_mode="I want to select the branch myself"
@@ -569,7 +560,6 @@ for crdroid_profile in \
     INPUT_CLANG_CHOICE="Recommended (auto-select based on branch)" \
     INPUT_ROOT_SOLUTION="No root changes" \
     INPUT_BUILD_MODE="Patch/config validation only" \
-    INPUT_ROM_GKI_MODULE_COMPAT="Strict GKI module checks (default)" \
     GITHUB_ENV="$RESOLVER_FIXTURE_DIR/env" \
     GITHUB_OUTPUT="$RESOLVER_FIXTURE_DIR/output" \
     GITHUB_STEP_SUMMARY="$RESOLVER_FIXTURE_DIR/summary" \
@@ -654,13 +644,11 @@ done
   }
   export -f git
   bakasu_profiles=(
-    "SM8450 | OnePlus 10T / Ace Pro | LineageOS community"
     "SM8550 | OnePlus 11 / 12R | LineageOS (recommended)"
     "SM8550 | OnePlus 11 / 12R | LineageOS (recommended)"
-    "SM8650 | OnePlus 12 | LineageOS (recommended)"
   )
-  bakasu_branches=(lineage-20 lineage-20 lineage-23.0 lineage-23.0)
-  bakasu_susfs_refs=(gki-android13-5.10 gki-android13-5.15 gki-android14-5.15 gki-android14-6.1)
+  bakasu_branches=(lineage-20 lineage-23.0)
+  bakasu_susfs_refs=(gki-android13-5.15 gki-android14-5.15)
   for target in "${!bakasu_profiles[@]}"; do
     for root_name in BakaSU ReSukiSU; do
       for suffix in "" " + SUSFS" " + SUSFS + NoMount (experimental)" " + SUSFS + ZeroMount (experimental)"; do
@@ -850,13 +838,13 @@ EOF
   resolve_known_susfs_rejects >/dev/null
 )
 test ! -e "$SUSFS_VENDOR_FIXTURE_DIR/fs/namespace.c.rej" \
-  || fail "SM8650 SUSFS recovery left the namespace reject in place"
+  || fail "SUSFS vendor reject recovery left the namespace reject in place"
 test ! -e "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c.rej" \
-  || fail "SM8650 SUSFS recovery left the superblock reject in place"
+  || fail "SUSFS vendor reject recovery left the superblock reject in place"
 grep -Fq '#include <linux/susfs_def.h>' "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c" \
-  || fail "SM8650 SUSFS recovery did not add the superblock header"
+  || fail "SUSFS vendor reject recovery did not add the superblock header"
 grep -Fq 'extern bool susfs_is_current_ksu_domain(void);' "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c" \
-  || fail "SM8650 SUSFS recovery did not add the superblock domain declaration"
+  || fail "SUSFS vendor reject recovery did not add the superblock domain declaration"
 
 # Link the generated SELinux compatibility object with all combinations of
 # native symbols. Source inspection alone misses duplicate definitions at LTO.
@@ -1170,23 +1158,6 @@ apply_variant_configs "$MODULE_CONFIG_FIXTURE"
 assert_eq "$MODULE_ABI_SNAPSHOT" \
   "$(grep -E "$MODULE_ABI_PATTERN" "$MODULE_CONFIG_FIXTURE")" \
   "root presets must preserve vendor ABI-sensitive configs"
-printf '%s\n' 'CONFIG_MODULE_SIG=y' '# CONFIG_MODULE_SIG_FORCE is not set' \
-  'CONFIG_MODULE_SIG_PROTECT=y' >> "$MODULE_CONFIG_FIXTURE"
-ROM_GKI_MODULE_COMPAT=0
-MODULE_CONFIG_HASH="$(sha256sum "$MODULE_CONFIG_FIXTURE" | cut -d' ' -f1)"
-apply_rom_gki_module_compat_config "$MODULE_CONFIG_FIXTURE"
-assert_eq "$MODULE_CONFIG_HASH" \
-  "$(sha256sum "$MODULE_CONFIG_FIXTURE" | cut -d' ' -f1)" \
-  "strict mode must preserve GKI protection"
-ROM_GKI_MODULE_COMPAT=1
-apply_rom_gki_module_compat_config "$MODULE_CONFIG_FIXTURE"
-grep -Fqx '# CONFIG_MODULE_SIG_PROTECT is not set' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode did not disable GKI module protection"
-grep -Fqx 'CONFIG_MODULE_SIG=y' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode disabled module signature verification"
-grep -Fqx '# CONFIG_MODULE_SIG_FORCE is not set' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode changed required module signatures"
-ROM_GKI_MODULE_COMPAT=0
 grep -Fq 'write_kernel_scmversion "$KERNEL_COMMIT"' "$COMPILE_SCRIPT" \
   || fail "full builds do not pin the ROM-compatible kernel release suffix"
 if grep -Fq 'touch .scmversion' "$COMPILE_SCRIPT"; then
@@ -1251,7 +1222,6 @@ mkdir -p \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/source/tools" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/out/arch/arm64/boot" \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8650/out/arch/arm64/boot" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/SukiSU-Ultra/userspace/ksud/bin/aarch64" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/bin"
 printf '%s\n' \
@@ -1298,7 +1268,6 @@ git clone -q "$ANYKERNEL_PACKAGE_FIXTURE_DIR/source" "$ANYKERNEL_PACKAGE_FIXTURE
 printf '%s\n' 'kernel.string=dirty-cache' > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/anykernel.sh"
 printf '%s\n' stale > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/Image"
 printf '%s\n' image > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/out/arch/arm64/boot/Image"
-printf '%s\n' image > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8650/out/arch/arm64/boot/Image"
 (
   # Packaging must require proof for the exact Image it includes.
   . "$SCRIPT_DIR/../lib/kpm-image.sh"
@@ -1434,52 +1403,6 @@ for package_timestamp in 20260101_000000 20260101_000001; do
     "$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" | cut -d' ' -f1)" \
     "AnyKernel preflight diagnostics idempotence"
 done
-
-(
-  cd "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work"
-  PATH="$ANYKERNEL_PACKAGE_FIXTURE_DIR/bin:$PATH" \
-  SOC=sm8650 \
-  PROFILE_ID=sm8650-oneplus12-crdroid \
-  TARGET_NAME='OnePlus 12' \
-  DEVICE_CODENAMES=waffle \
-  DEVICE_NAMES='waffle OP5929L1 OP595DL1' \
-  SUPPORTED_ANDROID_VERSIONS=17 \
-  SOURCE_NAME=crDroid \
-  KERNEL_BRANCH=17.0 \
-  MODULES_BRANCH=17.0 \
-  KERNEL_COMMIT=1111111111111111111111111111111111111111 \
-  MODULES_COMMIT=2222222222222222222222222222222222222222 \
-  CLANG_VERSION=test-clang \
-  KSU_TYPE=KernelSU-Next-with-susfs \
-  ROM_GKI_MODULE_COMPAT=1 \
-  BUILD_TIMESTAMP=20260101_000002 \
-  GITHUB_WORKSPACE="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work" \
-  GITHUB_ENV="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/github-env" \
-  GITHUB_OUTPUT="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/github-output" \
-  MAGISK_APK_PATH="$ANYKERNEL_PACKAGE_FIXTURE_DIR/Magisk.apk" \
-  MAGISK_APK_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/Magisk.apk" | cut -d' ' -f1)" \
-  MAGISKBOOT_ARM64_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a/libmagiskboot.so" | cut -d' ' -f1)" \
-  MAGISK_BUSYBOX_ARM64_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a/libbusybox.so" | cut -d' ' -f1)" \
-  ANYKERNEL_REPO="$ANYKERNEL_PACKAGE_FIXTURE_DIR/source" \
-  ANYKERNEL_COMMIT="$ANYKERNEL_PACKAGE_COMMIT" \
-  bash "$ANYKERNEL_PACKAGE_SCRIPT" >/dev/null
-)
-test -s "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/release-assets/sm8650-oneplus12-crdroid_KernelSU-Next-with-susfs_111111111111_20260101_000002_rom-gki-compat.zip" \
-  || fail "OnePlus 12 package with arm64 tools was not produced"
-grep -Fxq 'supported.versions=17' "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/anykernel.sh" \
-  || fail "crDroid 13 OnePlus 12 package does not enforce Android 17"
-assert_eq "magisk-arm64-magiskboot" \
-  "$(cat "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/tools/magiskboot")" \
-  "OnePlus 12 MagiskBoot replacement"
-assert_eq "magisk-arm64-busybox" \
-  "$(cat "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/tools/busybox")" \
-  "OnePlus 12 BusyBox replacement"
-grep -Fq 'Bundled MagiskBoot ABI: arm64' \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" \
-  || fail "OnePlus 12 package does not report arm64 MagiskBoot"
-grep -Fq 'Removing incompatible app-injected mkbootfs' \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" \
-  || fail "OnePlus 12 package does not remove an injected 32-bit mkbootfs"
 
 for i in "${!profiles[@]}"; do
   resolve_build_profile "${profiles[$i]}"
