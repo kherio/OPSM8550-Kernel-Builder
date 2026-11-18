@@ -59,6 +59,12 @@ done
 kernel_branch_input="$(sed -n '/^      kernel_branch:/,/^      clang_choice:/p' "$WORKFLOW_FILE")"
 grep -Fq 'type: choice' <<< "$kernel_branch_input" \
   || fail "manual kernel branch input must be a choice"
+grep -Fq -- '- "16.0"' <<< "$kernel_branch_input" \
+  || fail "manual kernel branch choices must include crDroid 16.0"
+grep -Fq -- '- lineage-23.2' <<< "$kernel_branch_input" \
+  || fail "manual kernel branch choices must include LineageOS / LunarisOS lineage-23.2"
+grep -Fq -- '- oneplus/sm8550_b_16.0.0_oneplus_11' <<< "$kernel_branch_input" \
+  || fail "manual kernel branch choices must include the OnePlus 11 official branch"
 grep -Fq -- '- "17.0"' <<< "$kernel_branch_input" \
   || fail "manual kernel branch choices must include crDroid 13 / Android 17"
 grep -Fq -- '- clang-r584948 (Android 17 / crDroid 13 era)' "$WORKFLOW_FILE" \
@@ -355,18 +361,10 @@ resolve_susfs_settings sm8550 lineage-20.0
 assert_eq "gki-android13-5.15" "$SUSFS_REF" "Android 13 susfs"
 resolve_susfs_settings sm8550 lineage-23.2
 assert_eq "gki-android14-5.15" "$SUSFS_REF" "Android 16 susfs"
-resolve_susfs_settings sm7550 lineage-23.0
-assert_eq "gki-android14-5.15" "$SUSFS_REF" "Nord CE4 susfs"
-for crdroid_soc in sm7550 sm8550 sm8650; do
-  resolve_susfs_settings "$crdroid_soc" 17.0
-  if [[ "$crdroid_soc" == sm8650 ]]; then
-    assert_eq "gki-android14-6.1" "$SUSFS_REF" "crDroid 13 OnePlus 12 GKI base"
-  else
-    assert_eq "gki-android14-5.15" "$SUSFS_REF" "crDroid 13 $crdroid_soc GKI base"
-  fi
-  [[ "$(zeromount_patch_sha256 "${SUSFS_REF#gki-}")" =~ ^[0-9a-f]{64}$ ]] \
-    || fail "crDroid 13 $crdroid_soc ZeroMount patch mapping"
-done
+resolve_susfs_settings sm8550 17.0
+assert_eq "gki-android14-5.15" "$SUSFS_REF" "crDroid 13 sm8550 GKI base"
+[[ "$(zeromount_patch_sha256 "${SUSFS_REF#gki-}")" =~ ^[0-9a-f]{64}$ ]] \
+  || fail "crDroid 13 sm8550 ZeroMount patch mapping"
 assert_eq "7b08b969e3577d282b352a267cb343b02b707d2a" \
   "$(su_session_compatible_susfs_commit gki-android13-5.10)" "SukiSU Android 13 5.10 SUSFS pin"
 assert_eq "adaef1c599e770707311ad36b015a0de3f30ac28" \
@@ -822,13 +820,13 @@ EOF
   resolve_known_susfs_rejects >/dev/null
 )
 test ! -e "$SUSFS_VENDOR_FIXTURE_DIR/fs/namespace.c.rej" \
-  || fail "SM8650 SUSFS recovery left the namespace reject in place"
+  || fail "SUSFS vendor reject recovery left the namespace reject in place"
 test ! -e "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c.rej" \
-  || fail "SM8650 SUSFS recovery left the superblock reject in place"
+  || fail "SUSFS vendor reject recovery left the superblock reject in place"
 grep -Fq '#include <linux/susfs_def.h>' "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c" \
-  || fail "SM8650 SUSFS recovery did not add the superblock header"
+  || fail "SUSFS vendor reject recovery did not add the superblock header"
 grep -Fq 'extern bool susfs_is_current_ksu_domain(void);' "$SUSFS_VENDOR_FIXTURE_DIR/fs/super.c" \
-  || fail "SM8650 SUSFS recovery did not add the superblock domain declaration"
+  || fail "SUSFS vendor reject recovery did not add the superblock domain declaration"
 
 # Link the generated SELinux compatibility object with all combinations of
 # native symbols. Source inspection alone misses duplicate definitions at LTO.
@@ -1206,7 +1204,6 @@ mkdir -p \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/source/tools" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/out/arch/arm64/boot" \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8650/out/arch/arm64/boot" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/SukiSU-Ultra/userspace/ksud/bin/aarch64" \
   "$ANYKERNEL_PACKAGE_FIXTURE_DIR/bin"
 printf '%s\n' \
@@ -1253,7 +1250,6 @@ git clone -q "$ANYKERNEL_PACKAGE_FIXTURE_DIR/source" "$ANYKERNEL_PACKAGE_FIXTURE
 printf '%s\n' 'kernel.string=dirty-cache' > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/anykernel.sh"
 printf '%s\n' stale > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/Image"
 printf '%s\n' image > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8550/out/arch/arm64/boot/Image"
-printf '%s\n' image > "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/sm8650/out/arch/arm64/boot/Image"
 (
   # Packaging must require proof for the exact Image it includes.
   . "$SCRIPT_DIR/../lib/kpm-image.sh"
@@ -1389,51 +1385,6 @@ for package_timestamp in 20260101_000000 20260101_000001; do
     "$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" | cut -d' ' -f1)" \
     "AnyKernel preflight diagnostics idempotence"
 done
-
-(
-  cd "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work"
-  PATH="$ANYKERNEL_PACKAGE_FIXTURE_DIR/bin:$PATH" \
-  SOC=sm8650 \
-  PROFILE_ID=sm8650-oneplus12-crdroid \
-  TARGET_NAME='OnePlus 12' \
-  DEVICE_CODENAMES=waffle \
-  DEVICE_NAMES='waffle OP5929L1 OP595DL1' \
-  SUPPORTED_ANDROID_VERSIONS=17 \
-  SOURCE_NAME=crDroid \
-  KERNEL_BRANCH=17.0 \
-  MODULES_BRANCH=17.0 \
-  KERNEL_COMMIT=1111111111111111111111111111111111111111 \
-  MODULES_COMMIT=2222222222222222222222222222222222222222 \
-  CLANG_VERSION=test-clang \
-  KSU_TYPE=KernelSU-Next-with-susfs \
-  BUILD_TIMESTAMP=20260101_000002 \
-  GITHUB_WORKSPACE="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work" \
-  GITHUB_ENV="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/github-env" \
-  GITHUB_OUTPUT="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/github-output" \
-  MAGISK_APK_PATH="$ANYKERNEL_PACKAGE_FIXTURE_DIR/Magisk.apk" \
-  MAGISK_APK_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/Magisk.apk" | cut -d' ' -f1)" \
-  MAGISKBOOT_ARM64_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a/libmagiskboot.so" | cut -d' ' -f1)" \
-  MAGISK_BUSYBOX_ARM64_SHA256="$(sha256sum "$ANYKERNEL_PACKAGE_FIXTURE_DIR/magisk-apk/lib/arm64-v8a/libbusybox.so" | cut -d' ' -f1)" \
-  ANYKERNEL_REPO="$ANYKERNEL_PACKAGE_FIXTURE_DIR/source" \
-  ANYKERNEL_COMMIT="$ANYKERNEL_PACKAGE_COMMIT" \
-  bash "$ANYKERNEL_PACKAGE_SCRIPT" >/dev/null
-)
-test -s "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/release-assets/sm8650-oneplus12-crdroid_KernelSU-Next-with-susfs_111111111111_20260101_000002.zip" \
-  || fail "OnePlus 12 package with arm64 tools was not produced"
-grep -Fxq 'supported.versions=17' "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/anykernel.sh" \
-  || fail "crDroid 13 OnePlus 12 package does not enforce Android 17"
-assert_eq "magisk-arm64-magiskboot" \
-  "$(cat "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/tools/magiskboot")" \
-  "OnePlus 12 MagiskBoot replacement"
-assert_eq "magisk-arm64-busybox" \
-  "$(cat "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/tools/busybox")" \
-  "OnePlus 12 BusyBox replacement"
-grep -Fq 'Bundled MagiskBoot ABI: arm64' \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" \
-  || fail "OnePlus 12 package does not report arm64 MagiskBoot"
-grep -Fq 'Removing incompatible app-injected mkbootfs' \
-  "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/META-INF/com/google/android/update-binary" \
-  || fail "OnePlus 12 package does not remove an injected 32-bit mkbootfs"
 
 for i in "${!profiles[@]}"; do
   resolve_build_profile "${profiles[$i]}"

@@ -38,7 +38,7 @@ independently and records both exact commits in the build provenance.
 
 Every package accepts both its custom-ROM codename and the device-specific
 stock board IDs published by the corresponding device tree. Generic SoC board
-names such as `taro`, `kalama`, and `pineapple` are deliberately excluded so a
+names such as `taro` and `kalama` are deliberately excluded so a
 package cannot pass the check merely because another phone shares its chipset.
 The check remains enabled, and a rejected flash prints all four device values
 reported to AnyKernel so a genuinely missing regional alias can be diagnosed

@@ -57,7 +57,6 @@ MAGISK_TOOLS_VERSION="${MAGISK_TOOLS_VERSION:-30.7}"
 MAGISK_APK_URL="${MAGISK_APK_URL:-https://github.com/topjohnwu/Magisk/releases/download/v30.7/Magisk-v30.7.apk}"
 MAGISK_APK_SHA256="${MAGISK_APK_SHA256:-e0d32d2123532860f97123d927b1bb86c4e08e6fd8a48bfc6b5bee0afae9ebd5}"
 MAGISKBOOT_ARM64_SHA256="${MAGISKBOOT_ARM64_SHA256:-d7440e2cd89899426e809554bf793baef9804ccbe5a52ce34a8b6242725d3c77}"
-MAGISK_BUSYBOX_ARM64_SHA256="${MAGISK_BUSYBOX_ARM64_SHA256:-4d60ab3f5a59ebb2ca863f2f514e6924401b581e9b64f602665c008177626651}"
 MAGISK_APK_PATH="${MAGISK_APK_PATH:-}"
 
 SHORT_KERNEL_COMMIT="${KERNEL_COMMIT:0:12}"
@@ -135,18 +134,6 @@ if [[ "$KPM_ENABLED" == true ]]; then
     "$MAGISKBOOT_ARM64_SHA256" \
     "AnyKernel3/tools/magiskboot" \
     "$MAGISK_APK_PATH"
-  prepare_anykernel_arm64_toolset "AnyKernel3/tools"
-  ANYKERNEL_BUSYBOX_ABI="arm64"
-  ARM64_TOOLSET_REQUIRED=true
-elif [[ "$PROFILE_ID" == sm8650-oneplus12-crdroid ]]; then
-  install_anykernel_arm64_magiskboot \
-    "$MAGISK_APK_URL" \
-    "$MAGISK_APK_SHA256" \
-    "$MAGISKBOOT_ARM64_SHA256" \
-    "AnyKernel3/tools/magiskboot" \
-    "$MAGISK_APK_PATH" \
-    "AnyKernel3/tools/busybox" \
-    "$MAGISK_BUSYBOX_ARM64_SHA256"
   prepare_anykernel_arm64_toolset "AnyKernel3/tools"
   ANYKERNEL_BUSYBOX_ABI="arm64"
   ARM64_TOOLSET_REQUIRED=true

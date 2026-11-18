@@ -174,12 +174,6 @@ resolve_susfs_settings() {
   local branch="$2"
 
   case "$soc" in
-    sm7550)
-      SUSFS_REF="gki-android14-5.15"
-      ;;
-    sm8450)
-      SUSFS_REF="gki-android13-5.10"
-      ;;
     sm8550)
       case "$branch" in
         lineage-20*|thirteen*|android13*|13.*|oneplus/*_t_13*|oneplus_*_t_13*)
@@ -189,9 +183,6 @@ resolve_susfs_settings() {
           SUSFS_REF="gki-android14-5.15"
           ;;
       esac
-      ;;
-    sm8650)
-      SUSFS_REF="gki-android14-6.1"
       ;;
     *)
       echo "::error::No susfs mapping is configured for platform $soc"
