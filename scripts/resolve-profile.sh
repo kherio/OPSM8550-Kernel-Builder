@@ -148,7 +148,7 @@ else
   DEFAULT_MODULES_REPO="https://github.com/${KERNEL_SOURCE}/android_kernel_oneplus_${UPSTREAM_SOC}-modules.git"
   KERNEL_CLONE_DIR="${SOC}"
   # Vendor kernel symlinks point to the upstream repository stem, which can
-  # intentionally differ from the marketed SoC (Nord CE4: sm7550 -> sm8550).
+  # intentionally differ from the marketed SoC.
   MODULES_CLONE_DIR="${UPSTREAM_SOC}-modules"
 fi
 KERNEL_REPO="${KERNEL_REPO_OVERRIDE:-$DEFAULT_KERNEL_REPO}"
@@ -312,21 +312,13 @@ case "$KERNEL_SOURCE" in
     [[ "$KERNEL_BRANCH" =~ ^oneplus[/_] ]] \
       || echo "::warning::OnePlus official source usually uses oneplus/* branches; selected '$KERNEL_BRANCH'."
     ;;
-  LineageOS|lineage-ovaltine-dev)
+  LineageOS)
     [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
       || echo "::warning::Lineage-style source usually uses lineage-* branches; selected '$KERNEL_BRANCH'."
     ;;
   LunarisOS)
     [[ "$KERNEL_BRANCH" =~ ^lineage- ]] \
       || echo "::warning::LunarisOS OnePlus 11 source usually uses a lineage-* kernel branch; selected '$KERNEL_BRANCH'."
-    ;;
-  OnePlus12R-development)
-    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* ]] \
-      || echo "::warning::Unexpected OnePlus 12R development branch: '$KERNEL_BRANCH'."
-    ;;
-  OnePlus-Nord-CE4-development)
-    [[ "$KERNEL_BRANCH" == lineage-* || "$KERNEL_BRANCH" == sixteen* || "$KERNEL_BRANCH" == seventeen* ]] \
-      || echo "::warning::Unexpected OnePlus Nord CE4 development branch: '$KERNEL_BRANCH'."
     ;;
   crdroidandroid)
     echo "Note: crDroid branch naming may differ from LineageOS."

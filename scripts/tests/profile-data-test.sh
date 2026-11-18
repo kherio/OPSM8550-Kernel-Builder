@@ -37,7 +37,7 @@ assert_eq() {
 
 profiles=()
 mapfile -t profiles < <(list_build_profiles)
-assert_eq "12" "${#profiles[@]}" "profile count"
+assert_eq "4" "${#profiles[@]}" "profile count"
 
 WORKFLOW_FILE="${SCRIPT_DIR}/../../.github/workflows/build.yml"
 UPSTREAM_HEALTH_WORKFLOW="${SCRIPT_DIR}/../../.github/workflows/upstream-health.yml"
@@ -52,19 +52,10 @@ ZEROMOUNT_SETUP_SCRIPT="${SCRIPT_DIR}/../lib/zeromount-setup.sh"
 SUKISU_SUSFS_COMPAT_PATCH="${SCRIPT_DIR}/../patches/sukisu-susfs-core-init-compat.patch"
 SUKISU_SUSFS_POLICY_COMPAT_PATCH="${SCRIPT_DIR}/../patches/sukisu-susfs-policy-compat.patch"
 sh -n "$ANYKERNEL_TEMPLATE" || fail "AnyKernel device template has invalid shell syntax"
-# The workflow only offers the OnePlus 11 (SM8550) presets; the resolver still
-# knows every profile. Require each preset the workflow offers to be a known
-# profile, and the default preset to be offered.
-workflow_profile_input="$(sed -n '/^      build_profile:/,/^      branch_mode:/p' "$WORKFLOW_FILE")"
-workflow_profiles=()
-mapfile -t workflow_profiles < <(sed -n 's/^          - \(SM[0-9]* | .*\)$/\1/p' <<< "$workflow_profile_input")
-(( ${#workflow_profiles[@]} > 0 )) || fail "workflow offers no build profiles"
-for profile in "${workflow_profiles[@]}"; do
-  printf '%s\n' "${profiles[@]}" | grep -Fxq -- "$profile" \
-    || fail "workflow offers an unknown profile option: $profile"
+for profile in "${profiles[@]}"; do
+  grep -Fq -- "- ${profile}" "$WORKFLOW_FILE" \
+    || fail "workflow is missing profile option: $profile"
 done
-grep -Fq -- "default: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)" <<< "$workflow_profile_input" \
-  || fail "workflow default profile is not the recommended preset"
 kernel_branch_input="$(sed -n '/^      kernel_branch:/,/^      clang_choice:/p' "$WORKFLOW_FILE")"
 grep -Fq 'type: choice' <<< "$kernel_branch_input" \
   || fail "manual kernel branch input must be a choice"
@@ -135,22 +126,12 @@ grep -Fq 'git checkout -q --force --detach FETCH_HEAD' "$ANYKERNEL_PACKAGE_SCRIP
 if grep -Fq 'Kernel-SU/AnyKernel3.git' "$RESOLVER_SCRIPT"; then
   fail "resolver still references the removed Kernel-SU AnyKernel3 fork"
 fi
-grep -Fq 'profile: SM8650 | OnePlus 12 | crDroid' "$UPSTREAM_HEALTH_WORKFLOW" \
-  || fail "upstream health must exercise the crDroid SM8650 certificate compatibility path"
-grep -Fq 'integration: SukiSU Ultra + SUSFS + NoMount + KPM (experimental)' "$UPSTREAM_HEALTH_WORKFLOW" \
+grep -Fq -- '- SukiSU Ultra + SUSFS + NoMount + KPM (experimental)' "$UPSTREAM_HEALTH_WORKFLOW" \
   || fail "upstream health must exercise the featured KPM integration"
-awk '
-  /integration: SukiSU Ultra \+ SUSFS \+ NoMount \+ KPM \(experimental\)/ { kpm = 1; next }
-  kpm && /profile: SM8650 \| OnePlus 12 \| crDroid/ { found = 1; exit }
-  kpm && /integration:/ { kpm = 0 }
-  END { exit !found }
-' "$UPSTREAM_HEALTH_WORKFLOW" \
-  || fail "upstream health must exercise KPM on the crDroid OnePlus 12 source"
-
-expected_socs=(sm7550 sm7550 sm8450 sm8450 sm8550 sm8550 sm8550 sm8550 sm8550 sm8650 sm8650 sm8650)
-expected_upstream_socs=(sm8550 sm8550 sm8450 sm8450 sm8550 sm8550 sm8550 sm8550 sm8550 sm8650 sm8650 sm8650)
-expected_codenames=(benz benz negroni ovaltine salami salami "salami aston astonc" "salami aston astonc" "aston astonc" waffle waffle waffle)
-expected_devices=("benz OP5D3FL1 CPH2613" "benz OP5D3FL1 CPH2613" "negroni OP516EL1 OP516FL1" "ovaltine OP5551L1 OP5552L1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "aston OP5D35L1 astonc OP5CF9L1" "waffle OP5929L1 OP595DL1" "waffle OP5929L1 OP595DL1" "waffle OP5929L1 OP595DL1")
+expected_socs=(sm8550 sm8550 sm8550 sm8550)
+expected_upstream_socs=(sm8550 sm8550 sm8550 sm8550)
+expected_codenames=(salami salami "salami aston astonc" "salami aston astonc")
+expected_devices=("salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1" "salami OP591BL1 OP594DL1 aston OP5D35L1 astonc OP5CF9L1")
 
 for i in "${!profiles[@]}"; do
   resolve_build_profile "${profiles[$i]}"
@@ -162,17 +143,6 @@ for i in "${!profiles[@]}"; do
     || fail "${profiles[$i]} did not resolve all required metadata"
 done
 
-resolve_build_profile "SM7550 | OnePlus Nord CE4 | development"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y" "$KERNEL_MAKE_FLAGS" "Nord CE4 development make flags"
-resolve_build_profile "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)"
-assert_eq "crdroidandroid" "$KERNEL_SOURCE" "Nord CE4 crDroid kernel source"
-assert_eq "sm8550" "$UPSTREAM_SOC" "Nord CE4 crDroid upstream repository SoC"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y" "$KERNEL_MAKE_FLAGS" "Nord CE4 crDroid make flags"
-
-resolve_build_profile "SM8650 | OnePlus 12 | LineageOS (recommended)"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y" "$KERNEL_MAKE_FLAGS" "OnePlus 12 LineageOS make flags"
-resolve_build_profile "SM8650 | OnePlus 12 | crDroid"
-assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y" "$KERNEL_MAKE_FLAGS" "OnePlus 12 crDroid make flags"
 resolve_build_profile "SM8550 | OnePlus 11 / 12R | crDroid"
 assert_eq "CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_SALAMI_DTB=y CONFIG_ASTON_DTB=y" \
   "$KERNEL_MAKE_FLAGS" "OnePlus 11 / 12R crDroid make flags"
@@ -550,10 +520,8 @@ for expected_field in \
     || fail "FinaSU resolver missing $expected_field"
 done
 
-for crdroid_profile in \
-  "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)" \
-  "SM8550 | OnePlus 11 / 12R | crDroid" \
-  "SM8650 | OnePlus 12 | crDroid"; do
+crdroid_profiles=("SM8550 | OnePlus 11 / 12R | crDroid")
+for crdroid_profile in "${crdroid_profiles[@]}"; do
   resolve_build_profile "$crdroid_profile"
   for resolver_case in automatic-17 manual-17 manual-16; do
     resolver_mode="I want to select the branch myself"
@@ -665,13 +633,11 @@ done
   }
   export -f git
   bakasu_profiles=(
-    "SM8450 | OnePlus 10T / Ace Pro | LineageOS community"
     "SM8550 | OnePlus 11 / 12R | LineageOS (recommended)"
     "SM8550 | OnePlus 11 / 12R | LineageOS (recommended)"
-    "SM8650 | OnePlus 12 | LineageOS (recommended)"
   )
-  bakasu_branches=(lineage-20 lineage-20 lineage-23.0 lineage-23.0)
-  bakasu_susfs_refs=(gki-android13-5.10 gki-android13-5.15 gki-android14-5.15 gki-android14-6.1)
+  bakasu_branches=(lineage-20 lineage-23.0)
+  bakasu_susfs_refs=(gki-android13-5.15 gki-android14-5.15)
   for target in "${!bakasu_profiles[@]}"; do
     for root_name in BakaSU ReSukiSU; do
       for suffix in "" " + SUSFS" " + SUSFS + NoMount (experimental)" " + SUSFS + ZeroMount (experimental)"; do

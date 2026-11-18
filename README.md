@@ -1,7 +1,7 @@
 # OnePlus Snapdragon Kernel Builder (with Kali NetHunter support)
 
-GitHub Actions pipeline for building selected OnePlus Snapdragon 7 Gen 3(SM7550),
-8 Gen 1(SM8450), 8 Gen 2(SM8550), and 8 Gen 3(SM8650) kernels. The repository contains the build
+GitHub Actions pipeline for building OnePlus 11 (Snapdragon 8 Gen 2, SM8550)
+kernels. The repository contains the build
 pipeline, validation, packaging, and release automation; kernel sources are
 resolved from upstream repositories at build time.
 
@@ -21,56 +21,15 @@ and source independently.
 
 | SoC | Target device | AnyKernel accepted device IDs | Source preset |
 | --- | --- | --- | --- |
-| `sm7550` | OnePlus Nord CE4 | `benz`, `OP5D3FL1`, `CPH2613` | Nord CE4 development |
-| `sm7550` | OnePlus Nord CE4 | `benz`, `OP5D3FL1`, `CPH2613` | crDroid (recommended for crDroid) |
-| `sm8450` | OnePlus 10 Pro | `negroni`, `OP516EL1`, `OP516FL1` | OnePlus official |
-| `sm8450` | OnePlus 10T / Ace Pro | `ovaltine`, `OP5551L1`, `OP5552L1` | LineageOS community |
 | `sm8550` | OnePlus 11 | `salami`, `OP591BL1`, `OP594DL1` | OnePlus official |
 | `sm8550` | OnePlus 11 | `salami`, `OP591BL1`, `OP594DL1` | LunarisOS |
 | `sm8550` | OnePlus 11 / 12R / Ace 3 | OnePlus 11 IDs plus `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | LineageOS |
 | `sm8550` | OnePlus 11 / 12R / Ace 3 | OnePlus 11 IDs plus `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | crDroid |
-| `sm8550` | OnePlus 12R / Ace 3 | `aston`, `OP5D35L1`, `astonc`, `OP5CF9L1` | OnePlus 12R development |
-| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | OnePlus official |
-| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | LineageOS |
-| `sm8650` | OnePlus 12 | `waffle`, `OP5929L1`, `OP595DL1` | crDroid |
 
-The OnePlus 10T community source is intentionally labeled `ovaltine`; it is
-not presented as a OnePlus 10 Pro source.
-
-The Nord CE4 source projects store their SM7550/crow device support in
-`sm8550`-named kernel and modules repositories and build it with the Kalama
-GKI fragments plus the benz-specific `CONFIG_OPLUS_DEVICE_DTBS=y` and
-`CONFIG_BENZ_DTB=y` make flags. The profiles keep the real `sm7550` device
-identity in release metadata while resolving that upstream naming explicitly.
-Use the dedicated crDroid profile on crDroid: it resolves crDroid's own
-kernel and modules instead of the unrelated development/Lineage branch, which
-is not ABI-compatible with crDroid's first-stage vendor modules.
-
-The OnePlus 12 LineageOS and crDroid profiles also reproduce both device-tree
-make assignments, `CONFIG_OPLUS_DEVICE_DTBS=y` from the shared SM8650
-BoardConfig and `CONFIG_WAFFLE_DTB=y` from the waffle BoardConfig, on every
-make invocation and record them in build provenance. Command-line Kbuild
-assignments are not expected to be written back to `.config`; keeping them on
-the make command line matches how the ROM builds its kernel and external
-modules.
-
-The OnePlus 12 crDroid profile has an optional **ROM GKI module compatibility**
-mode for a boot-only custom Image. A custom Image generates a new module signing
-key, while the installed ROM keeps its `system_dlkm` GKI modules. On affected
-builds, `rfkill.ko` is rejected with `exports protected symbol rfkill_alloc`,
-which prevents the dependent `qca_cld3_kiwi_v2` Wi-Fi driver from loading.
-Selecting `Use existing ROM system_dlkm modules (experimental)` disables
-`CONFIG_MODULE_SIG_PROTECT` for that build while retaining module signature
-parsing and module version checks. It allows modules whose signature cannot be
-verified with this Image's newly generated key, so only use it with ROM modules
-you trust. This can let the existing ROM modules load, but it reduces GKI
-protected-symbol enforcement and does not guarantee
-compatibility if module CRCs or firmware differ. The default remains strict.
-The chosen mode is recorded in `build-info.json` and in the ZIP filename.
-The OnePlus 12 crDroid flashable ZIP also replaces AnyKernel's 32-bit ARM
-BusyBox and MagiskBoot with pinned arm64 versions from Magisk 30.7. The device
-reports `arm64-v8a` and cannot execute the old 32-bit MagiskBoot; the package
-verifies both binary checksums and ELF architecture before creating the ZIP.
+The OnePlus 11 / 12R LineageOS and crDroid profiles are the recommended
+presets. On crDroid use the crDroid profile: it resolves crDroid's own kernel
+and modules instead of the unrelated Lineage branch, which is not
+ABI-compatible with crDroid's first-stage vendor modules.
 
 The LunarisOS OnePlus 11 profile follows the kernel source published in the
 LunarisOS OTA metadata. Its maintainer kernel uses `lineage-23.2`, while its
@@ -108,8 +67,7 @@ selected root preset changes only its required feature options.
 
 ## crDroid 13 (Android 17)
 
-The existing crDroid profiles cover Nord CE4, OnePlus 11 / 12R / Ace 3, and
-OnePlus 12 on crDroid 13. Automatic branch selection follows the upstream
+The crDroid profile covers OnePlus 11 / 12R / Ace 3 on crDroid 13. Automatic branch selection follows the upstream
 default, currently `17.0`, for both the kernel and matching modules. Manual
 selection also offers `17.0`; retain `16.0` for crDroid 12 / Android 16.
 [crDroid 13 is based on Android 17](https://crdroid.net/blog/2026-09-28-crDroid-13-BETA-source-is-now-pushed/),
@@ -119,8 +77,8 @@ so the ROM major version `13` must not be confused with the Android branch
 Android 17 branches select the pinned AOSP `clang-r584948` toolchain to match
 [crDroid's compiler default](https://github.com/crdroidandroid/android_build_soong/blob/17.0/cc/config/global.go).
 Flashable ZIPs enforce `supported.versions=17`. SUSFS and ZeroMount still use
-the devices' GKI kernel families: Android 14 / 5.15 for Nord CE4 and OnePlus
-11 / 12R / Ace 3, and Android 14 / 6.1 for OnePlus 12. The ROM Android version
+the device's GKI kernel family: Android 14 / 5.15 for OnePlus
+11 / 12R / Ace 3. The ROM Android version
 does not change those kernel-base mappings.
 
 The OnePlus 11 / 12R crDroid profile passes the common OPlus DTB flag and both
@@ -488,7 +446,7 @@ packages replace AnyKernel's legacy 32-bit ARM BusyBox and
 MagiskBoot with verified AArch64 builds. BusyBox comes from the exact SukiSU
 source revision used by the build; MagiskBoot comes from a pinned official
 Magisk APK with both archive and extracted-binary SHA-256 verification. On
-arm64-only SoCs such as the Snapdragon 8 Gen 3 in OnePlus 12, the installer
+arm64-only devices, the installer
 also discards the manager app's incompatible ARM32 `mkbootfs` injection and
 uses BusyBox `cpio` instead. Other unused ARM32 AnyKernel partition utilities
 are removed, and packaging fails if any remaining native runtime tool is not
@@ -548,14 +506,11 @@ Pushes and pull requests run:
 - actionlint for all workflow files
 
 `Check upstream health` runs every Monday and can also be started manually. It
-resolves exact commits for all twelve profiles, then runs a thirty-job
+resolves exact commits for all four profiles, then runs a thirteen-job
 smoke-test matrix: KernelSU-Next + SUSFS + NoMount, SukiSU Ultra + SUSFS +
-NoMount + KPM
-(including the crDroid OnePlus 12 / Android 6.1 vendor include drift),
-and BakaSU + SUSFS + NoMount are validated on representative SM7550 (including
-both CE4 source families), SM8450, SM8550 (including crDroid), and SM8650
-sources, with an additional
-baseline validation for the LunarisOS OnePlus 11 and crDroid OnePlus 12 sources.
+NoMount + KPM, and BakaSU + SUSFS + NoMount are validated on the OnePlus 11 / 12R
+LineageOS and crDroid sources, with an additional
+baseline validation for the LunarisOS OnePlus 11 source.
 The SukiSU Ultra ZeroMount preset is validated across the representative
 5.10, 5.15, and 6.1 source families; the KernelSU-Next and BakaSU ZeroMount
 presets additionally run against the representative SM8550 LineageOS source.

@@ -8,18 +8,10 @@
 
 list_build_profiles() {
   printf '%s\n' \
-    "SM7550 | OnePlus Nord CE4 | development" \
-    "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)" \
-    "SM8450 | OnePlus 10 Pro | OnePlus official" \
-    "SM8450 | OnePlus 10T / Ace Pro | LineageOS community" \
     "SM8550 | OnePlus 11 | OnePlus official" \
     "SM8550 | OnePlus 11 | LunarisOS" \
     "SM8550 | OnePlus 11 / 12R | LineageOS (recommended)" \
-    "SM8550 | OnePlus 11 / 12R | crDroid" \
-    "SM8550 | OnePlus 12R | development" \
-    "SM8650 | OnePlus 12 | OnePlus official" \
-    "SM8650 | OnePlus 12 | LineageOS (recommended)" \
-    "SM8650 | OnePlus 12 | crDroid"
+    "SM8550 | OnePlus 11 / 12R | crDroid"
 }
 
 resolve_build_profile() {
@@ -34,46 +26,6 @@ resolve_build_profile() {
   KERNEL_MAKE_FLAGS=""
 
   case "$profile" in
-    "SM7550 | OnePlus Nord CE4 | development")
-      PROFILE_ID="sm7550-oneplus-nord-ce4-dev"
-      SOC="sm7550"
-      TARGET_NAME="OnePlus Nord CE4"
-      DEVICE_CODENAMES="benz"
-      DEVICE_NAMES="benz OP5D3FL1 CPH2613"
-      KERNEL_SOURCE="OnePlus-Nord-CE4-development"
-      SOURCE_LAYOUT="community-flat"
-      KERNEL_MAKE_FLAGS="CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y"
-      ;;
-    "SM7550 | OnePlus Nord CE4 | crDroid (recommended for crDroid)")
-      PROFILE_ID="sm7550-oneplus-nord-ce4-crdroid"
-      SOC="sm7550"
-      TARGET_NAME="OnePlus Nord CE4"
-      DEVICE_CODENAMES="benz"
-      DEVICE_NAMES="benz OP5D3FL1 CPH2613"
-      KERNEL_SOURCE="crdroidandroid"
-      SOURCE_LAYOUT="community-flat"
-      # Keep parity with crDroid's benz BoardConfig.mk. These are make
-      # command-line assignments, not ordinary defconfig fragments.
-      KERNEL_MAKE_FLAGS="CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_BENZ_DTB=y"
-      ;;
-    "SM8450 | OnePlus 10 Pro | OnePlus official")
-      PROFILE_ID="sm8450-oneplus10pro-official"
-      SOC="sm8450"
-      TARGET_NAME="OnePlus 10 Pro"
-      DEVICE_CODENAMES="negroni"
-      DEVICE_NAMES="negroni OP516EL1 OP516FL1"
-      KERNEL_SOURCE="OnePlusOSS"
-      SOURCE_LAYOUT="oneplus-official"
-      ;;
-    "SM8450 | OnePlus 10T / Ace Pro | LineageOS community")
-      PROFILE_ID="sm8450-oneplus10t-lineage"
-      SOC="sm8450"
-      TARGET_NAME="OnePlus 10T / Ace Pro"
-      DEVICE_CODENAMES="ovaltine"
-      DEVICE_NAMES="ovaltine OP5551L1 OP5552L1"
-      KERNEL_SOURCE="lineage-ovaltine-dev"
-      SOURCE_LAYOUT="community-flat"
-      ;;
     "SM8550 | OnePlus 11 | OnePlus official")
       PROFILE_ID="sm8550-oneplus11-official"
       SOC="sm8550"
@@ -115,49 +67,6 @@ resolve_build_profile() {
       # Match the common and salami/aston device BoardConfig make flags.
       KERNEL_MAKE_FLAGS="CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_SALAMI_DTB=y CONFIG_ASTON_DTB=y"
       ;;
-    "SM8550 | OnePlus 12R | development")
-      PROFILE_ID="sm8550-oneplus12r-dev"
-      SOC="sm8550"
-      TARGET_NAME="OnePlus 12R"
-      DEVICE_CODENAMES="aston astonc"
-      DEVICE_NAMES="aston OP5D35L1 astonc OP5CF9L1"
-      KERNEL_SOURCE="OnePlus12R-development"
-      SOURCE_LAYOUT="community-flat"
-      ;;
-    "SM8650 | OnePlus 12 | OnePlus official")
-      PROFILE_ID="sm8650-oneplus12-official"
-      SOC="sm8650"
-      TARGET_NAME="OnePlus 12"
-      DEVICE_CODENAMES="waffle"
-      DEVICE_NAMES="waffle OP5929L1 OP595DL1"
-      KERNEL_SOURCE="OnePlusOSS"
-      SOURCE_LAYOUT="oneplus-official"
-      ;;
-    "SM8650 | OnePlus 12 | LineageOS (recommended)")
-      PROFILE_ID="sm8650-oneplus12-lineage"
-      SOC="sm8650"
-      TARGET_NAME="OnePlus 12"
-      DEVICE_CODENAMES="waffle"
-      DEVICE_NAMES="waffle OP5929L1 OP595DL1"
-      KERNEL_SOURCE="LineageOS"
-      SOURCE_LAYOUT="community-flat"
-      # Match both TARGET_KERNEL_ADDITIONAL_FLAGS assignments from the common
-      # SM8650 and device-specific waffle BoardConfig files. These options are
-      # deliberately passed on every make invocation rather than written into
-      # a shared defconfig so the kernel and its ROM-built external modules see
-      # the same device configuration.
-      KERNEL_MAKE_FLAGS="CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y"
-      ;;
-    "SM8650 | OnePlus 12 | crDroid")
-      PROFILE_ID="sm8650-oneplus12-crdroid"
-      SOC="sm8650"
-      TARGET_NAME="OnePlus 12"
-      DEVICE_CODENAMES="waffle"
-      DEVICE_NAMES="waffle OP5929L1 OP595DL1"
-      KERNEL_SOURCE="crdroidandroid"
-      SOURCE_LAYOUT="community-flat"
-      KERNEL_MAKE_FLAGS="CONFIG_OPLUS_DEVICE_DTBS=y CONFIG_WAFFLE_DTB=y"
-      ;;
     *)
       echo "::error::Unknown build profile: $profile"
       return 1
@@ -165,40 +74,14 @@ resolve_build_profile() {
   esac
 
   UPSTREAM_SOC="$SOC"
-  if [[ "$SOC" == "sm7550" ]]; then
-    # Both supported CE4 sources intentionally carry their SM7550/crow
-    # support in sm8550-named kernel and modules repositories.
-    UPSTREAM_SOC="sm8550"
-  fi
 
   case "$SOC" in
-    sm7550)
-      PLATFORM_SLUG="7gen3"
-      PLATFORM_NAME="Snapdragon 7 Gen 3"
-      BUILD_CONFIGS="vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config"
-      OFFICIAL_BUILD_TARGET="kalama"
-      OFFICIAL_GKI_FRAGMENT="arch/arm64/configs/vendor/kalama_GKI.config"
-      ;;
-    sm8450)
-      PLATFORM_SLUG="8gen1"
-      PLATFORM_NAME="Snapdragon 8 Gen 1"
-      BUILD_CONFIGS="vendor/waipio_GKI.config vendor/oplus/waipio_GKI.config vendor/debugfs.config"
-      OFFICIAL_BUILD_TARGET="waipio"
-      OFFICIAL_GKI_FRAGMENT="arch/arm64/configs/vendor/waipio_GKI.config"
-      ;;
     sm8550)
       PLATFORM_SLUG="8gen2"
       PLATFORM_NAME="Snapdragon 8 Gen 2"
       BUILD_CONFIGS="vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config"
       OFFICIAL_BUILD_TARGET="kalama"
       OFFICIAL_GKI_FRAGMENT="arch/arm64/configs/vendor/kalama_GKI.config"
-      ;;
-    sm8650)
-      PLATFORM_SLUG="8gen3"
-      PLATFORM_NAME="Snapdragon 8 Gen 3"
-      BUILD_CONFIGS="vendor/pineapple_GKI.config vendor/oplus/pineapple_GKI.config"
-      OFFICIAL_BUILD_TARGET="pineapple"
-      OFFICIAL_GKI_FRAGMENT="arch/arm64/configs/vendor/pineapple_GKI.config"
       ;;
   esac
 
@@ -215,21 +98,9 @@ resolve_build_profile() {
       SOURCE_NAME="LunarisOS (OnePlus 11)"
       SOURCE_SLUG="lunarisos"
       ;;
-    lineage-ovaltine-dev)
-      SOURCE_NAME="LineageOS community (ovaltine)"
-      SOURCE_SLUG="lineage-community"
-      ;;
     crdroidandroid)
       SOURCE_NAME="crDroid"
       SOURCE_SLUG="crdroid"
-      ;;
-    OnePlus12R-development)
-      SOURCE_NAME="OnePlus 12R development"
-      SOURCE_SLUG="oneplus12r-dev"
-      ;;
-    OnePlus-Nord-CE4-development)
-      SOURCE_NAME="OnePlus Nord CE4 development"
-      SOURCE_SLUG="oneplus-nord-ce4-dev"
       ;;
   esac
 }
