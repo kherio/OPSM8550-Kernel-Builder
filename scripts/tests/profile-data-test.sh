@@ -16,6 +16,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/../lib/susfs-apply.sh"
 # shellcheck source=../lib/kernel-helpers.sh
 . "${SCRIPT_DIR}/../lib/kernel-helpers.sh"
+# shellcheck source=../lib/bbg-setup.sh
+. "${SCRIPT_DIR}/../lib/bbg-setup.sh"
+# shellcheck source=../lib/droidspaces-setup.sh
+. "${SCRIPT_DIR}/../lib/droidspaces-setup.sh"
 # shellcheck source=../lib/verify.sh
 . "${SCRIPT_DIR}/../lib/verify.sh"
 
@@ -48,15 +52,22 @@ ZEROMOUNT_SETUP_SCRIPT="${SCRIPT_DIR}/../lib/zeromount-setup.sh"
 SUKISU_SUSFS_COMPAT_PATCH="${SCRIPT_DIR}/../patches/sukisu-susfs-core-init-compat.patch"
 SUKISU_SUSFS_POLICY_COMPAT_PATCH="${SCRIPT_DIR}/../patches/sukisu-susfs-policy-compat.patch"
 sh -n "$ANYKERNEL_TEMPLATE" || fail "AnyKernel device template has invalid shell syntax"
-for profile in "${profiles[@]}"; do
-  grep -Fq -- "- ${profile}" "$WORKFLOW_FILE" \
-    || fail "workflow is missing profile option: $profile"
+# The workflow only offers the OnePlus 11 (SM8550) presets; the resolver still
+# knows every profile. Require each preset the workflow offers to be a known
+# profile, and the default preset to be offered.
+workflow_profile_input="$(sed -n '/^      build_profile:/,/^      branch_mode:/p' "$WORKFLOW_FILE")"
+workflow_profiles=()
+mapfile -t workflow_profiles < <(sed -n 's/^          - \(SM[0-9]* | .*\)$/\1/p' <<< "$workflow_profile_input")
+(( ${#workflow_profiles[@]} > 0 )) || fail "workflow offers no build profiles"
+for profile in "${workflow_profiles[@]}"; do
+  printf '%s\n' "${profiles[@]}" | grep -Fxq -- "$profile" \
+    || fail "workflow offers an unknown profile option: $profile"
 done
+grep -Fq -- "default: SM8550 | OnePlus 11 / 12R | LineageOS (recommended)" <<< "$workflow_profile_input" \
+  || fail "workflow default profile is not the recommended preset"
 kernel_branch_input="$(sed -n '/^      kernel_branch:/,/^      clang_choice:/p' "$WORKFLOW_FILE")"
 grep -Fq 'type: choice' <<< "$kernel_branch_input" \
   || fail "manual kernel branch input must be a choice"
-grep -Fq -- '- "16.0"' <<< "$kernel_branch_input" \
-  || fail "manual kernel branch choices must include crDroid 16.0"
 grep -Fq -- '- "17.0"' <<< "$kernel_branch_input" \
   || fail "manual kernel branch choices must include crDroid 13 / Android 17"
 grep -Fq -- '- clang-r584948 (Android 17 / crDroid 13 era)' "$WORKFLOW_FILE" \
