@@ -391,6 +391,28 @@ KSUN_NOMOUNT_CONFIG_FIXTURE="$(mktemp)"
 ZEROMOUNT_CONFIG_FIXTURE="$(mktemp)"
 ZEROMOUNT_FIXTURE_DIR="$(mktemp -d)"
 MODULE_CONFIG_FIXTURE="$(mktemp)"
+POWER_CONFIG_FIXTURE="$(mktemp)"
+printf '%s\n' 'CONFIG_RCU_NOCB_CPU=y' 'CONFIG_KFENCE=y' 'CONFIG_KFENCE_SAMPLE_INTERVAL=500' > "$POWER_CONFIG_FIXTURE"
+KFENCE_OFF=0 apply_kfence_off_config "$POWER_CONFIG_FIXTURE"
+grep -Fqx 'CONFIG_KFENCE_SAMPLE_INTERVAL=500' "$POWER_CONFIG_FIXTURE" \
+  || fail "KFENCE must keep its sampling interval when the option is off"
+KFENCE_OFF=1 apply_kfence_off_config "$POWER_CONFIG_FIXTURE"
+grep -Fqx 'CONFIG_KFENCE_SAMPLE_INTERVAL=0' "$POWER_CONFIG_FIXTURE" \
+  || fail "kfence_sampling did not set the sample interval to 0"
+grep -Fqx 'CONFIG_KFENCE=y' "$POWER_CONFIG_FIXTURE" \
+  || fail "kfence_sampling must keep KFENCE compiled in"
+LAZY_RCU=0 apply_lazy_rcu_config "$POWER_CONFIG_FIXTURE"
+if grep -Fq 'CONFIG_RCU_LAZY' "$POWER_CONFIG_FIXTURE"; then
+  fail "lazy_rcu changed the config while disabled"
+fi
+LAZY_RCU=1 apply_lazy_rcu_config "$POWER_CONFIG_FIXTURE"
+for lazy_key in CONFIG_RCU_NOCB_CPU CONFIG_RCU_NOCB_CPU_DEFAULT_ALL CONFIG_RCU_LAZY; do
+  grep -Fqx "${lazy_key}=y" "$POWER_CONFIG_FIXTURE" \
+    || fail "lazy_rcu did not enable ${lazy_key}"
+done
+grep -Fqx '# CONFIG_RCU_LAZY_DEFAULT_OFF is not set' "$POWER_CONFIG_FIXTURE" \
+  || fail "lazy_rcu must keep RCU_LAZY_DEFAULT_OFF disabled"
+rm -f "$POWER_CONFIG_FIXTURE"
 SCMVERSION_FIXTURE="$(mktemp)"
 KPM_VERIFY_FIXTURE="$(mktemp -d)"
 NOMOUNT_FIXTURE_DIR="$(mktemp -d)"

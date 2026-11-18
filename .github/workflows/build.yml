@@ -113,6 +113,14 @@ on:
         options:
           - Keep per-cpu workqueues (default)
           - Make workqueues power-efficient by default (experimental)
+      kfence_sampling:
+        description: Turns off KFENCE heap-bug sampling (CONFIG_KFENCE_SAMPLE_INTERVAL=0), whose 500 ms timer wakes idle CPUs; off by default (KFENCE stays active)
+        required: true
+        type: choice
+        default: Keep KFENCE sampling (default)
+        options:
+          - Keep KFENCE sampling (default)
+          - Disable KFENCE sampling (experimental)
       nethunter:
         description: Kali NetHunter kernel support (USB gadget RNDIS/OBEX, USB serial/Bluetooth/Ethernet, NFC, CAN, RTL-SDR); off by default
         required: true
@@ -232,6 +240,7 @@ jobs:
           INPUT_TCP_CONGESTION: ${{ inputs.tcp_congestion }}
           INPUT_LAZY_RCU: ${{ inputs.lazy_rcu }}
           INPUT_WQ_POWER_EFFICIENT: ${{ inputs.wq_power_efficient }}
+          INPUT_KFENCE_SAMPLING: ${{ inputs.kfence_sampling }}
           INPUT_NETHUNTER: ${{ inputs.nethunter }}
           INPUT_BASEBAND_GUARD: ${{ inputs.baseband_guard }}
           INPUT_DROIDSPACES: ${{ inputs.droidspaces }}

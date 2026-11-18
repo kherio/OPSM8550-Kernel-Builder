@@ -258,15 +258,17 @@ apply_tcp_bbr_config() {
 # Batches non-urgent RCU callbacks and flushes them after a delay, memory
 # pressure, or a long enough backlog, instead of invoking them right away.
 # Lets the CPU stay idle longer between kernel housekeeping wake-ups. Needs
-# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place);
-# left unset here so olddefconfig can still enable it from the base defconfig.
+# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place),
+# and the lazy delays only apply to CPUs whose callbacks are offloaded, so
+# CONFIG_RCU_NOCB_CPU_DEFAULT_ALL offloads every CPU without requiring an
+# rcu_nocbs=all boot parameter (which this kernel's cmdline does not carry).
 # RCU_LAZY_DEFAULT_OFF is intentionally left disabled so laziness is active
 # immediately after boot, with no runtime toggle required.
 apply_lazy_rcu_config() {
   local config_file="$1"
 
   [[ "${LAZY_RCU:-0}" == 1 ]] || return 0
-  enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY
+  enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_NOCB_CPU_DEFAULT_ALL CONFIG_RCU_LAZY
   disable_config_values "$config_file" CONFIG_RCU_LAZY_DEFAULT_OFF
 }
 
@@ -282,6 +284,18 @@ apply_wq_power_efficient_config() {
 
   [[ "${WQ_POWER_EFFICIENT:-0}" == 1 ]] || return 0
   enable_config_values "$config_file" CONFIG_WQ_POWER_EFFICIENT_DEFAULT
+}
+
+# KFENCE (a sampling heap-bug detector) arms a timer every
+# CONFIG_KFENCE_SAMPLE_INTERVAL ms, which wakes idle CPUs; Google briefly
+# disabled it in GKI for an idle-power regression. An interval of 0 keeps the
+# code compiled (no ABI change) but leaves KFENCE off unless a kfence.sample_interval
+# boot parameter turns it on again.
+apply_kfence_off_config() {
+  local config_file="$1"
+
+  [[ "${KFENCE_OFF:-0}" == 1 ]] || return 0
+  set_config_value "$config_file" CONFIG_KFENCE_SAMPLE_INTERVAL 0
 }
 
 # NetHunter support: USB gadget functions the stock config lacks (RNDIS, OBEX,
@@ -361,6 +375,7 @@ apply_variant_configs() {
   apply_tcp_bbr_config "$config_file"
   apply_lazy_rcu_config "$config_file"
   apply_wq_power_efficient_config "$config_file"
+  apply_kfence_off_config "$config_file"
   apply_nethunter_config "$config_file"
   apply_droidspaces_config "$config_file"
   apply_bbg_config "$config_file"

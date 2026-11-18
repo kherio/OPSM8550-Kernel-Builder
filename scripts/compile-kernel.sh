@@ -50,6 +50,7 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${TCP_BBR:=0}"
 : "${LAZY_RCU:=0}"
 : "${WQ_POWER_EFFICIENT:=0}"
+: "${KFENCE_OFF:=0}"
 : "${NETHUNTER:=0}"
 : "${BASEBAND_GUARD:=0}"
 : "${DROIDSPACES:=0}"
@@ -239,12 +240,21 @@ fi
 
 if [[ "$LAZY_RCU" == 1 ]]; then
   require_config_enabled out/.config CONFIG_RCU_NOCB_CPU
+  require_config_enabled out/.config CONFIG_RCU_NOCB_CPU_DEFAULT_ALL
   require_config_enabled out/.config CONFIG_RCU_LAZY
   require_config_disabled out/.config CONFIG_RCU_LAZY_DEFAULT_OFF
 fi
 
 if [[ "$WQ_POWER_EFFICIENT" == 1 ]]; then
   require_config_enabled out/.config CONFIG_WQ_POWER_EFFICIENT_DEFAULT
+fi
+
+if [[ "$KFENCE_OFF" == 1 ]]; then
+  grep -qx 'CONFIG_KFENCE_SAMPLE_INTERVAL=0' out/.config || {
+    echo "::error::Expected CONFIG_KFENCE_SAMPLE_INTERVAL=0 in out/.config, but it was not set."
+    grep -n 'KFENCE' out/.config || true
+    exit 1
+  }
 fi
 
 verify_nethunter_config out/.config nethunter-proof.txt

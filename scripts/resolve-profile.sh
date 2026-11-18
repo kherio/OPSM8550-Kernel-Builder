@@ -24,6 +24,7 @@ INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_LAZY_RCU="${INPUT_LAZY_RCU:-Keep stock RCU behavior (default)}"
 INPUT_WQ_POWER_EFFICIENT="${INPUT_WQ_POWER_EFFICIENT:-Keep per-cpu workqueues (default)}"
+INPUT_KFENCE_SAMPLING="${INPUT_KFENCE_SAMPLING:-Keep KFENCE sampling (default)}"
 INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (default)}"
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
@@ -65,6 +66,15 @@ case "$INPUT_WQ_POWER_EFFICIENT" in
   "Make workqueues power-efficient by default (experimental)") WQ_POWER_EFFICIENT=1 ;;
   *)
     echo "::error::Unknown workqueue power-efficient mode: $INPUT_WQ_POWER_EFFICIENT"
+    exit 1
+    ;;
+esac
+
+case "$INPUT_KFENCE_SAMPLING" in
+  "Keep KFENCE sampling (default)") KFENCE_OFF=0 ;;
+  "Disable KFENCE sampling (experimental)") KFENCE_OFF=1 ;;
+  *)
+    echo "::error::Unknown KFENCE sampling mode: $INPUT_KFENCE_SAMPLING"
     exit 1
     ;;
 esac
@@ -326,6 +336,7 @@ esac
   echo "TCP_BBR=$TCP_BBR"
   echo "LAZY_RCU=$LAZY_RCU"
   echo "WQ_POWER_EFFICIENT=$WQ_POWER_EFFICIENT"
+  echo "KFENCE_OFF=$KFENCE_OFF"
   echo "NETHUNTER=$NETHUNTER"
   echo "BASEBAND_GUARD=$BASEBAND_GUARD"
   echo "DROIDSPACES=$DROIDSPACES"
@@ -416,6 +427,7 @@ esac
   echo "- TCP BBR default: $TCP_BBR"
   echo "- Lazy RCU: $LAZY_RCU"
   echo "- Power-efficient workqueues: $WQ_POWER_EFFICIENT"
+  echo "- KFENCE sampling disabled: $KFENCE_OFF"
   echo "- NetHunter options: $NETHUNTER"
   echo "- Baseband-guard: $BASEBAND_GUARD"
   echo "- Droidspaces: $DROIDSPACES"
