@@ -59,12 +59,8 @@ done
 kernel_branch_input="$(sed -n '/^      kernel_branch:/,/^      clang_choice:/p' "$WORKFLOW_FILE")"
 grep -Fq 'type: choice' <<< "$kernel_branch_input" \
   || fail "manual kernel branch input must be a choice"
-grep -Fq -- '- "16.0"' <<< "$kernel_branch_input" \
-  || fail "manual kernel branch choices must include crDroid 16.0"
-grep -Fq -- '- lineage-23.2' <<< "$kernel_branch_input" \
-  || fail "manual kernel branch choices must include LineageOS / LunarisOS lineage-23.2"
-grep -Fq -- '- oneplus/sm8550_b_16.0.0_oneplus_11' <<< "$kernel_branch_input" \
-  || fail "manual kernel branch choices must include the OnePlus 11 official branch"
+grep -Fq -- '- lineage-24.0' <<< "$kernel_branch_input" \
+  || fail "manual kernel branch choices must include LineageOS Android 17 (lineage-24.0)"
 grep -Fq -- '- "17.0"' <<< "$kernel_branch_input" \
   || fail "manual kernel branch choices must include crDroid 13 / Android 17"
 grep -Fq -- '- clang-r584948 (Android 17 / crDroid 13 era)' "$WORKFLOW_FILE" \

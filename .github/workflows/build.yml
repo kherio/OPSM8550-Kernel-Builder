@@ -24,29 +24,13 @@ on:
           - Use the recommended branch automatically
           - I want to select the branch myself
       kernel_branch:
-        description: Manual only; the branch must exist in the selected source (crDroid uses 17.0-13.0, LineageOS/LunarisOS use lineage-*, OnePlus official uses oneplus/*). Prefer automatic mode.
+        description: Manual only; Android 17 branches only, and the branch must exist in the selected source (crDroid uses 17.0, LineageOS uses lineage-24.0). Prefer automatic mode.
         required: true
         type: choice
         default: "17.0"
         options:
           - "17.0"
-          - "16.0"
-          - "15.0"
-          - "14.0"
-          - "13.0"
           - lineage-24.0
-          - lineage-23.2
-          - lineage-23.1
-          - lineage-23.0
-          - lineage-22.2
-          - lineage-22.1
-          - lineage-22.0
-          - lineage-21
-          - lineage-20
-          - oneplus/sm8550_b_16.0.0_oneplus_11
-          - oneplus/sm8550_v_15.0.0_oneplus11
-          - oneplus/sm8550_u_14.0.0_oneplus11
-          - oneplus/sm8550_t_13.1.0_oneplus11
       clang_choice:
         description: Compiler preset; auto is safest for normal builds
         required: true
