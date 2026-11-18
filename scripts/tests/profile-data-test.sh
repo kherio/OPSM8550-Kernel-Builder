@@ -154,10 +154,6 @@ grep -Fq "out/Module.symvers" "$WORKFLOW_FILE" \
   || fail "diagnostics do not retain the kernel module CRC table"
 grep -Fq "it does not replace the ROM's system_dlkm or vendor_dlkm modules" "$ANYKERNEL_PACKAGE_SCRIPT" \
   || fail "release notes do not warn about the retained ROM modules"
-grep -Fq 'INPUT_ROM_GKI_MODULE_COMPAT: ${{ inputs.rom_gki_module_compat }}' "$WORKFLOW_FILE" \
-  || fail "workflow does not pass the selected ROM GKI module compatibility mode"
-grep -Fq 'rom_gki_module_compat: $rom_gki_module_compat' "$ANYKERNEL_PACKAGE_SCRIPT" \
-  || fail "package provenance does not record ROM GKI module compatibility"
 
 resolve_build_profile "SM8550 | OnePlus 11 | LunarisOS"
 assert_eq "https://github.com/osm1019/kernel_oneplus_sm8550.git" "$KERNEL_REPO_OVERRIDE" "LunarisOS kernel repository"
@@ -548,7 +544,6 @@ for crdroid_profile in "${crdroid_profiles[@]}"; do
     INPUT_CLANG_CHOICE="Recommended (auto-select based on branch)" \
     INPUT_ROOT_SOLUTION="No root changes" \
     INPUT_BUILD_MODE="Patch/config validation only" \
-    INPUT_ROM_GKI_MODULE_COMPAT="Strict GKI module checks (default)" \
     GITHUB_ENV="$RESOLVER_FIXTURE_DIR/env" \
     GITHUB_OUTPUT="$RESOLVER_FIXTURE_DIR/output" \
     GITHUB_STEP_SUMMARY="$RESOLVER_FIXTURE_DIR/summary" \
@@ -1147,23 +1142,6 @@ apply_variant_configs "$MODULE_CONFIG_FIXTURE"
 assert_eq "$MODULE_ABI_SNAPSHOT" \
   "$(grep -E "$MODULE_ABI_PATTERN" "$MODULE_CONFIG_FIXTURE")" \
   "root presets must preserve vendor ABI-sensitive configs"
-printf '%s\n' 'CONFIG_MODULE_SIG=y' '# CONFIG_MODULE_SIG_FORCE is not set' \
-  'CONFIG_MODULE_SIG_PROTECT=y' >> "$MODULE_CONFIG_FIXTURE"
-ROM_GKI_MODULE_COMPAT=0
-MODULE_CONFIG_HASH="$(sha256sum "$MODULE_CONFIG_FIXTURE" | cut -d' ' -f1)"
-apply_rom_gki_module_compat_config "$MODULE_CONFIG_FIXTURE"
-assert_eq "$MODULE_CONFIG_HASH" \
-  "$(sha256sum "$MODULE_CONFIG_FIXTURE" | cut -d' ' -f1)" \
-  "strict mode must preserve GKI protection"
-ROM_GKI_MODULE_COMPAT=1
-apply_rom_gki_module_compat_config "$MODULE_CONFIG_FIXTURE"
-grep -Fqx '# CONFIG_MODULE_SIG_PROTECT is not set' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode did not disable GKI module protection"
-grep -Fqx 'CONFIG_MODULE_SIG=y' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode disabled module signature verification"
-grep -Fqx '# CONFIG_MODULE_SIG_FORCE is not set' "$MODULE_CONFIG_FIXTURE" \
-  || fail "ROM compatibility mode changed required module signatures"
-ROM_GKI_MODULE_COMPAT=0
 grep -Fq 'write_kernel_scmversion "$KERNEL_COMMIT"' "$COMPILE_SCRIPT" \
   || fail "full builds do not pin the ROM-compatible kernel release suffix"
 if grep -Fq 'touch .scmversion' "$COMPILE_SCRIPT"; then
@@ -1428,7 +1406,6 @@ done
   MODULES_COMMIT=2222222222222222222222222222222222222222 \
   CLANG_VERSION=test-clang \
   KSU_TYPE=KernelSU-Next-with-susfs \
-  ROM_GKI_MODULE_COMPAT=1 \
   BUILD_TIMESTAMP=20260101_000002 \
   GITHUB_WORKSPACE="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work" \
   GITHUB_ENV="$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/github-env" \
@@ -1441,7 +1418,7 @@ done
   ANYKERNEL_COMMIT="$ANYKERNEL_PACKAGE_COMMIT" \
   bash "$ANYKERNEL_PACKAGE_SCRIPT" >/dev/null
 )
-test -s "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/release-assets/sm8650-oneplus12-crdroid_KernelSU-Next-with-susfs_111111111111_20260101_000002_rom-gki-compat.zip" \
+test -s "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/release-assets/sm8650-oneplus12-crdroid_KernelSU-Next-with-susfs_111111111111_20260101_000002.zip" \
   || fail "OnePlus 12 package with arm64 tools was not produced"
 grep -Fxq 'supported.versions=17' "$ANYKERNEL_PACKAGE_FIXTURE_DIR/work/AnyKernel3/anykernel.sh" \
   || fail "crDroid 13 OnePlus 12 package does not enforce Android 17"

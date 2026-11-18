@@ -48,7 +48,6 @@ append_file_block() {
   echo "- Modules branch: ${MODULES_BRANCH}"
   echo "- Modules commit: \`${MODULES_COMMIT}\`"
   echo "- Device kernel make flags: ${KERNEL_MAKE_FLAGS:-none}"
-  echo "- ROM GKI module compatibility: ${ROM_GKI_MODULE_COMPAT:-0}"
   echo "- SUSFS logging: ${SUSFS_LOGGING:-1}"
   echo "- TCP BBR default: ${TCP_BBR:-0}"
   echo "- NetHunter options: ${NETHUNTER:-0}"

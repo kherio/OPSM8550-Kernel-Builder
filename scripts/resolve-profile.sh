@@ -20,7 +20,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${GITHUB_STEP_SUMMARY:?}"
 
 INPUT_KERNEL_BRANCH="${INPUT_KERNEL_BRANCH:-}"
-INPUT_ROM_GKI_MODULE_COMPAT="${INPUT_ROM_GKI_MODULE_COMPAT:-Strict GKI module checks (default)}"
 INPUT_SUSFS_LOGGING="${INPUT_SUSFS_LOGGING:-Keep SUSFS logging (default)}"
 INPUT_TCP_CONGESTION="${INPUT_TCP_CONGESTION:-Keep stock TCP congestion control (default)}"
 INPUT_LAZY_RCU="${INPUT_LAZY_RCU:-Keep stock RCU behavior (default)}"
@@ -33,21 +32,6 @@ INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Off (default)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
-
-case "$INPUT_ROM_GKI_MODULE_COMPAT" in
-  "Strict GKI module checks (default)") ROM_GKI_MODULE_COMPAT=0 ;;
-  "Use existing ROM system_dlkm modules (experimental)")
-    if [[ "$PROFILE_ID" != sm8650-oneplus12-crdroid ]]; then
-      echo "::error::ROM GKI module compatibility mode is currently validated only for the OnePlus 12 crDroid profile."
-      exit 1
-    fi
-    ROM_GKI_MODULE_COMPAT=1
-    ;;
-  *)
-    echo "::error::Unknown ROM GKI module compatibility mode: $INPUT_ROM_GKI_MODULE_COMPAT"
-    exit 1
-    ;;
-esac
 
 case "$INPUT_ROOT_HIDING_FIXES" in
   "Keep stock kernel code (default)") ROOT_HIDING_FIXES=0 ;;
@@ -338,7 +322,6 @@ esac
   echo "PLATFORM_NAME=$PLATFORM_NAME"
   echo "BUILD_CONFIGS=$BUILD_CONFIGS"
   echo "KERNEL_MAKE_FLAGS=$KERNEL_MAKE_FLAGS"
-  echo "ROM_GKI_MODULE_COMPAT=$ROM_GKI_MODULE_COMPAT"
   echo "SUSFS_LOGGING=$SUSFS_LOGGING"
   echo "TCP_BBR=$TCP_BBR"
   echo "LAZY_RCU=$LAZY_RCU"
@@ -403,7 +386,6 @@ esac
   echo "modules_commit=$MODULES_COMMIT"
   echo "clang_version=$CLANG_VERSION"
   echo "ksu_type=$KSU_TYPE"
-  echo "rom_gki_module_compat=$ROM_GKI_MODULE_COMPAT"
   echo "ksu_commit=$KSU_COMMIT"
   echo "susfs_ref=$SUSFS_REF"
   echo "susfs_commit=$SUSFS_COMMIT"
@@ -430,7 +412,6 @@ esac
     echo "- Device make flags: $KERNEL_MAKE_FLAGS"
   fi
   echo "- Root solution: $KSU_TYPE"
-  echo "- ROM GKI module compatibility: $ROM_GKI_MODULE_COMPAT"
   echo "- SUSFS logging: $SUSFS_LOGGING"
   echo "- TCP BBR default: $TCP_BBR"
   echo "- Lazy RCU: $LAZY_RCU"

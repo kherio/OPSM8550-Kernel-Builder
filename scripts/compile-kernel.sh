@@ -46,7 +46,6 @@ DROIDSPACES_CONFIG_DIR="${SCRIPT_DIR}/configs"
 : "${KERNEL_BRANCH:?}"
 : "${KERNEL_COMMIT:?}"
 : "${BUILD_MODE:?}"
-: "${ROM_GKI_MODULE_COMPAT:=0}"
 : "${SUSFS_LOGGING:=1}"
 : "${TCP_BBR:=0}"
 : "${LAZY_RCU:=0}"
@@ -224,10 +223,8 @@ read -r -a ACTIVE_CONFIG_ARRAY <<< "$ACTIVE_BUILD_CONFIGS"
 
 BUILD_PHASE="config generation"
 apply_variant_configs arch/arm64/configs/gki_defconfig
-apply_rom_gki_module_compat_config arch/arm64/configs/gki_defconfig
 make "${MAKE_ARGS[@]}" gki_defconfig "${ACTIVE_CONFIG_ARRAY[@]}"
 apply_variant_configs out/.config
-apply_rom_gki_module_compat_config out/.config
 make "${MAKE_ARGS[@]}" olddefconfig
 
 if [[ "$TCP_BBR" == 1 ]]; then
@@ -257,15 +254,6 @@ verify_droidspaces_config out/.config droidspaces-proof.txt
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
 require_config_enabled  out/.config CONFIG_MODVERSIONS
-if [[ "$ROM_GKI_MODULE_COMPAT" == 1 ]]; then
-  require_config_enabled out/.config CONFIG_MODULE_SIG
-  require_config_disabled out/.config CONFIG_MODULE_SIG_FORCE
-  require_config_disabled out/.config CONFIG_MODULE_SIG_PROTECT
-  grep -Fqx '# CONFIG_MODULE_SIG_PROTECT is not set' out/.config || {
-    echo "::error::ROM GKI module compatibility did not survive olddefconfig."
-    exit 1
-  }
-fi
 
 if [[ "$KSU_TYPE" != "None" ]]; then
   require_config_enabled out/.config CONFIG_KSU
