@@ -258,17 +258,17 @@ apply_tcp_bbr_config() {
 # Batches non-urgent RCU callbacks and flushes them after a delay, memory
 # pressure, or a long enough backlog, instead of invoking them right away.
 # Lets the CPU stay idle longer between kernel housekeeping wake-ups. Needs
-# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place),
-# and the lazy delays only apply to CPUs whose callbacks are offloaded, so
-# CONFIG_RCU_NOCB_CPU_DEFAULT_ALL offloads every CPU without requiring an
-# rcu_nocbs=all boot parameter (which this kernel's cmdline does not carry).
+# CONFIG_RCU_NOCB_CPU (offloads callbacks to a kthread in the first place).
+# The lazy delays only apply to CPUs whose callbacks are offloaded, i.e. those
+# listed in the rcu_nocbs= boot parameter. This 5.15 kernel has no
+# RCU_NOCB_CPU_DEFAULT_ALL symbol, so offloading has to come from the cmdline.
 # RCU_LAZY_DEFAULT_OFF is intentionally left disabled so laziness is active
 # immediately after boot, with no runtime toggle required.
 apply_lazy_rcu_config() {
   local config_file="$1"
 
   [[ "${LAZY_RCU:-0}" == 1 ]] || return 0
-  enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_NOCB_CPU_DEFAULT_ALL CONFIG_RCU_LAZY
+  enable_config_values "$config_file" CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY
   disable_config_values "$config_file" CONFIG_RCU_LAZY_DEFAULT_OFF
 }
 

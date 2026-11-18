@@ -240,7 +240,6 @@ fi
 
 if [[ "$LAZY_RCU" == 1 ]]; then
   require_config_enabled out/.config CONFIG_RCU_NOCB_CPU
-  require_config_enabled out/.config CONFIG_RCU_NOCB_CPU_DEFAULT_ALL
   require_config_enabled out/.config CONFIG_RCU_LAZY
   require_config_disabled out/.config CONFIG_RCU_LAZY_DEFAULT_OFF
 fi

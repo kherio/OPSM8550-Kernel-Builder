@@ -406,7 +406,7 @@ if grep -Fq 'CONFIG_RCU_LAZY' "$POWER_CONFIG_FIXTURE"; then
   fail "lazy_rcu changed the config while disabled"
 fi
 LAZY_RCU=1 apply_lazy_rcu_config "$POWER_CONFIG_FIXTURE"
-for lazy_key in CONFIG_RCU_NOCB_CPU CONFIG_RCU_NOCB_CPU_DEFAULT_ALL CONFIG_RCU_LAZY; do
+for lazy_key in CONFIG_RCU_NOCB_CPU CONFIG_RCU_LAZY; do
   grep -Fqx "${lazy_key}=y" "$POWER_CONFIG_FIXTURE" \
     || fail "lazy_rcu did not enable ${lazy_key}"
 done
