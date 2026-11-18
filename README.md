@@ -421,7 +421,11 @@ The workflow also:
 - caches the exact pinned AOSP Clang archive
 - restores a profile/branch/compiler-specific 3 GB compressed ccache
 - reports config, compile, total time, and ccache statistics in the job summary
-- reclaims unused hosted runner SDKs and creates up to 32 GB of swap for Full LTO
+- builds with ThinLTO instead of the stock defconfig's Full LTO, which keeps
+  the final link's peak memory and wall-clock time well below what Full LTO
+  needs for the same kernel
+- reclaims unused hosted runner SDKs and creates up to 32 GB of swap as extra
+  headroom for that link step
 - records memory, disk, and linker resource usage during full builds
 
 GitHub cache entries are an optimization only. A build remains able to download

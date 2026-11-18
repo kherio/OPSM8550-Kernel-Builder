@@ -260,6 +260,11 @@ verify_nethunter_config out/.config nethunter-proof.txt
 verify_bbg_config out/.config bbg-proof.txt
 verify_droidspaces_config out/.config droidspaces-proof.txt
 
+if [[ "$KSU_TYPE" != "None" ]]; then
+  require_config_disabled out/.config CONFIG_LTO_CLANG_FULL
+  require_config_enabled  out/.config CONFIG_LTO_CLANG_THIN
+fi
+
 require_config_enabled  out/.config CONFIG_MODULES
 require_config_enabled  out/.config CONFIG_MODULE_UNLOAD
 require_config_enabled  out/.config CONFIG_MODVERSIONS

@@ -245,6 +245,26 @@ verify_kernel_release_identity() {
   }
 }
 
+# crDroid's own gki_defconfig ships CONFIG_LTO_CLANG_FULL=y. Full LTO's own
+# Kconfig help text warns it "can use a large amount of RAM, and may take
+# much longer than the ThinLTO option" during the final link -- which is
+# exactly the resource-hungry single-threaded step this pipeline has had to
+# build a 32 GB swapfile around. ThinLTO parallelizes that link and keeps
+# peak memory far lower, at a negligible runtime cost; upstream's own text
+# says "If unsure, say Y". A real OnePlus 11 release kernel for this exact
+# device (EmberHeart) already ships CONFIG_LTO_CLANG_THIN=y instead of Full,
+# so this isn't an unproven swap. Left out of the "No root changes" preset so
+# that preset still means exactly what it says -- a config untouched beyond
+# what KSU_TYPE requires -- but applied to every build that already asks for
+# a root solution, since those get no such byte-for-byte guarantee anyway.
+apply_thin_lto_config() {
+  local config_file="$1"
+
+  [[ "$KSU_TYPE" != "None" ]] || return 0
+  disable_config_values "$config_file" CONFIG_LTO_CLANG_FULL
+  enable_config_values "$config_file" CONFIG_LTO_CLANG_THIN
+}
+
 # Builds BBR in and makes it the default congestion control. The default queue
 # discipline is left alone: BBR paces internally, and fq stays available.
 apply_tcp_bbr_config() {
@@ -372,6 +392,7 @@ verify_nethunter_config() {
 apply_variant_configs() {
   local config_file="$1"
 
+  apply_thin_lto_config "$config_file"
   apply_tcp_bbr_config "$config_file"
   apply_lazy_rcu_config "$config_file"
   apply_wq_power_efficient_config "$config_file"
