@@ -29,7 +29,7 @@ INPUT_ROOT_HIDING_FIXES="${INPUT_ROOT_HIDING_FIXES:-Keep stock kernel code (defa
 INPUT_NETHUNTER="${INPUT_NETHUNTER:-Keep stock kernel config (default)}"
 INPUT_BASEBAND_GUARD="${INPUT_BASEBAND_GUARD:-Off (default)}"
 INPUT_DROIDSPACES="${INPUT_DROIDSPACES:-Off (default)}"
-INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Off (default)}"
+INPUT_WIFI_DRIVER="${INPUT_WIFI_DRIVER:-Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)}"
 
 resolve_build_profile "$INPUT_BUILD_PROFILE"
 resolve_root_solution "$INPUT_ROOT_SOLUTION"
