@@ -149,7 +149,7 @@ on:
         description: Build an external USB Wi-Fi driver as a separate KernelSU module ZIP (kernel Image unchanged); off by default
         required: true
         type: choice
-        default: Off (default)
+        default: Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)
         options:
           - Off (default)
           - Build RTL8812BU module for TP-Link Archer T3U Plus (separate KernelSU module ZIP)
