@@ -84,7 +84,18 @@ build_rtl88x2bu_module() {
   make -j"$(nproc)" "${MAKE_ARGS[@]}" modules 2>&1 | tee wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::make modules failed."; return 1; }
 
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
+  # morrownr/88x2bu's own Makefile only sets obj-$(CONFIG_RTL8822BU) when it is
+  # invoked the "normal" way -- `make` inside the driver's own directory, with
+  # no $(KERNELRELEASE) set -- because that path is what exports
+  # CONFIG_RTL8822BU=m before recursing into the kernel's build system. Driving
+  # it the standard out-of-tree-module way instead, directly via the kernel's
+  # own `make O=out M=<dir> modules` (as below), skips straight to the
+  # kbuild-include branch of that Makefile, where CONFIG_RTL8822BU is still
+  # unset: obj-$(CONFIG_RTL8822BU) then expands to the empty "obj-" variable,
+  # so nothing is ever added to obj-m and the module silently builds nothing.
+  # Passing CONFIG_RTL8822BU=m on the command line here reproduces what that
+  # normal invocation path would have exported, without needing to go through it.
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
 
   ko="$src/${RTL88X2BU_MODULE_NAME}.ko"
