@@ -13,56 +13,54 @@ resolved from upstream repositories at build time.
 > with crDroid, FinaSU + SUSFS + NoMount. See
 > [Kali NetHunter kernel: technical reference](#kali-nethunter-kernel-technical-reference).
 
-## Differences from the original AzusaMyo build
+## What this pipeline adds over a typical kernel-builder workflow
 
-This repository started as a fork of AzusaMyo's `OPSM8550-Kernel-Builder`.
-That build let you pick a free-text kernel source/branch, a Clang version, and
-a KernelSU variant (`None`, `Official-KernelSU`, `KernelSU-Next`, `KowSU`,
-`ReSukiSU`, `ReSukiSU-with-susfs`, `ReSukiSU-with-susfs-KPM`), then produced an
-`Image`, an AnyKernel3 ZIP, and a GitHub Release. Since then, this fork has
-rewritten nearly all of that pipeline. The main differences:
+Many OnePlus/GKI kernel-builder pipelines stop at letting you pick a kernel
+source/branch, a Clang version, and a KernelSU variant, then produce an
+`Image` and an AnyKernel3 ZIP. This one goes considerably further:
 
 **Device and source support**
 - Curated device/source profiles (OnePlus 11 official, LunarisOS, LineageOS,
   crDroid — OnePlus 11 / 12R / Ace 3) instead of a free-text source + branch,
-  so an incompatible SoC/source pair can no longer be selected.
-- AnyKernel3 packages now carry `do.devicecheck=1` with only the exact
+  so an incompatible SoC/source pair can never be selected.
+- AnyKernel3 packages carry `do.devicecheck=1` with only the exact
   codenames/board IDs for the selected profile, plus Android-version
-  checking — the original package had neither.
+  checking — a check many basic packagers skip entirely.
 - Slot-aware boot image installation (`boot_a`/`boot_b` detection, correct
   handling of the OnePlus 11's ramdisk-less `boot` + `init_boot` split)
-  replacing AnyKernel's unpatched example-device logic.
+  instead of AnyKernel's unpatched example-device logic.
 
 **Root integrations**
-- Added FinaSU, SukiSU Ultra, BakaSU, NoMount, and ZeroMount, none of which
-  existed in the original (it only covered KernelSU, KernelSU-Next, KowSU, and
-  ReSukiSU).
-- Added KPM support with verified AArch64 BusyBox/MagiskBoot, replacing
-  AnyKernel's legacy 32-bit ARM tools.
-- Added a toggle to disable SUSFS kernel logging (the original always left it
-  on) and an opt-in for root-hiding fixes (ptrace message leak + Unicode path
-  bypass).
+- Supports KernelSU, KernelSU-Next, KowSU, ReSukiSU, FinaSU, SukiSU Ultra,
+  and BakaSU, each combinable with SUSFS, NoMount, or ZeroMount — most basic
+  pipelines cover only one or two of these.
+- KPM support with verified AArch64 BusyBox/MagiskBoot, replacing AnyKernel's
+  legacy 32-bit ARM tools.
+- A toggle to disable SUSFS kernel logging, and an opt-in for root-hiding
+  fixes (ptrace message leak + Unicode path bypass).
 
 **Kernel features**
 - ThinLTO instead of the stock defconfig's Full LTO for every root build,
   roughly halving the final link stage's time and peak memory.
 - Optional Lazy RCU, power-efficient workqueues, and disabled KFENCE sampling
-  (on by default) for lower idle power draw, and optional TCP BBR as the
-  default congestion control — none of these existed before.
+  (on by default) for lower idle power draw, plus optional TCP BBR as the
+  default congestion control — power-tuning options most build pipelines
+  don't expose at all.
 - Optional Kali NetHunter kernel support (USB gadget, serial, Bluetooth, NFC,
   CAN, RTL-SDR), Baseband-guard LSM, and Droidspaces container support.
 - Optional RTL8812BU/RTL8822BU USB Wi-Fi driver, built as a separate signed
   KernelSU module so the kernel Image itself stays unchanged.
 
 **Reliability and provenance**
-- Every release now ships `build-info.json` (exact source commits, KPM state,
-  workflow run URL) and `SHA256SUMS`; the original Release had neither.
+- Every release ships `build-info.json` (exact source commits, KPM state,
+  workflow run URL) and `SHA256SUMS` — far more traceability than a bare
+  `Image` and ZIP.
 - A weekly "Check upstream health" workflow resolves every supported
   profile/integration combination and smoke-builds each one, to catch
   upstream breakage before a real build hits it.
 - Pinned third-party Actions (full commit hashes), credential-scoped release
-  publishing, and retried network operations — the original had none of this
-  hardening.
+  publishing, and retried network operations harden the CI itself against
+  supply-chain and flakiness issues.
 - A local test suite (`scripts/tests/`) covering profile resolution,
   KPM/SUSFS/NoMount integrity, AnyKernel slot detection, and Clang download
   integrity, run before every change to this pipeline.
