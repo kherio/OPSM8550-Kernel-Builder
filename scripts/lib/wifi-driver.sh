@@ -97,16 +97,19 @@ build_rtl88x2bu_module() {
   # normal invocation path would have exported, without needing to go through it.
   # This driver predates both Clang-under-Werror builds and this kernel's
   # stricter diagnostics: it hardcodes GCC-13-only flags Clang's driver
-  # doesn't recognize (-Wno-stringop-overread and friends), and its own
-  # source trips several genuine but harmless Clang warnings (uninitialized-
-  # on-some-paths locals, redundant parens) that GCC never flagged. This
-  # kernel's GKI defconfig builds with CONFIG_WERROR=y, which promotes every
-  # one of those to a hard build error. Rather than chase each warning
-  # category one at a time (or patch vendored third-party source we don't
-  # maintain), -Wno-error turns -Werror back off for this one out-of-tree
-  # module only; the kernel's own first-party code still builds with
-  # CONFIG_WERROR=y untouched.
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS=-Wno-error -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
+  # doesn't recognize at all (-Wno-stringop-overread and friends), and its
+  # own source trips several genuine but harmless Clang-only warnings
+  # (uninitialized-on-some-paths locals, redundant parens) that GCC never
+  # flagged. This kernel's GKI defconfig builds with CONFIG_WERROR=y, which
+  # promotes every one of those to a hard build error -- and Clang treats an
+  # unrecognized -W name as a special driver-level diagnostic that a plain,
+  # later -Wno-error does NOT retroactively downgrade (unlike an ordinary
+  # per-translation-unit warning): it needs its own explicit
+  # -Wno-unknown-warning-option alongside -Wno-error. Both together turn
+  # -Werror back off for this one out-of-tree, third-party module only; the
+  # kernel's own first-party code still builds with CONFIG_WERROR=y
+  # untouched.
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS="-Wno-unknown-warning-option -Wno-error" -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
 
   ko="$src/${RTL88X2BU_MODULE_NAME}.ko"
