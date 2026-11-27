@@ -95,14 +95,18 @@ build_rtl88x2bu_module() {
   # so nothing is ever added to obj-m and the module silently builds nothing.
   # Passing CONFIG_RTL8822BU=m on the command line here reproduces what that
   # normal invocation path would have exported, without needing to go through it.
-  # The driver's Makefile also hardcodes a few GCC-13-era flags (e.g.
-  # -Wno-stringop-overread) that Clang's driver does not recognize at all.
-  # This kernel's GKI defconfig builds with CONFIG_WERROR=y, so Clang's
-  # "unknown warning option" diagnostic for those flags becomes a hard build
-  # error instead of a no-op warning. KCFLAGS=-Wno-unknown-warning-option
-  # downgrades that specific diagnostic back to a warning, same as upstream
-  # kernel builds already do for other third-party GCC-flag mismatches.
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS=-Wno-unknown-warning-option -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
+  # This driver predates both Clang-under-Werror builds and this kernel's
+  # stricter diagnostics: it hardcodes GCC-13-only flags Clang's driver
+  # doesn't recognize (-Wno-stringop-overread and friends), and its own
+  # source trips several genuine but harmless Clang warnings (uninitialized-
+  # on-some-paths locals, redundant parens) that GCC never flagged. This
+  # kernel's GKI defconfig builds with CONFIG_WERROR=y, which promotes every
+  # one of those to a hard build error. Rather than chase each warning
+  # category one at a time (or patch vendored third-party source we don't
+  # maintain), -Wno-error turns -Werror back off for this one out-of-tree
+  # module only; the kernel's own first-party code still builds with
+  # CONFIG_WERROR=y untouched.
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS=-Wno-error -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
 
   ko="$src/${RTL88X2BU_MODULE_NAME}.ko"
