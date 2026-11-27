@@ -9,8 +9,19 @@
 # Nothing is linked into the Image: the kernel stays ABI-identical.
 #
 
-RTL88X2BU_REPO="https://github.com/morrownr/88x2bu-20210702.git"
-RTL88X2BU_COMMIT="418d71cc00cd18b4a671f8c49ecce9b19cbfd3c9"
+# morrownr/88x2bu-20210702 is explicitly a frozen 2021 snapshot: its own
+# README says it gets no further API-related updates, and it predates the
+# cfg80211 multi-link (MLO-era) callback signatures this kernel's wireless
+# stack already uses (extra link_id arguments, wireless_dev.links[] instead
+# of a bare current_bss, etc.) -- confirmed by a real build failing on
+# exactly those mismatches. ShorterKing/RTL88x2BU-Android-Drivers_rtl8812au
+# vendors a newer Realtek driver tree (same GPL-2.0 licence, genuine Realtek
+# 2007-2019 copyright headers) that already handles both the old and new
+# cfg80211 shapes via LINUX_VERSION_CODE guards. The actual driver lives in
+# that repo's RTL88x2BU-Linux-Driver/ subdirectory.
+RTL88X2BU_REPO="https://github.com/ShorterKing/RTL88x2BU-Android-Drivers_rtl8812au.git"
+RTL88X2BU_COMMIT="578690da28a7a6bfc458d7e5ee44c51f19263e45"
+RTL88X2BU_REPO_SUBDIR="RTL88x2BU-Linux-Driver"
 RTL88X2BU_MODULE_NAME="88x2bu"
 WIFI_STAGE_DIR="wifi-module-stage"
 
@@ -18,6 +29,7 @@ export_exact_commit() {
   local repo="$1"
   local commit="$2"
   local dest="$3"
+  local subdir="${4:-}"
   local scratch="${dest}.git-src"
 
   rm -rf "$dest" "$scratch"
@@ -30,7 +42,13 @@ export_exact_commit() {
     return 1
   }
   mkdir -p "$dest"
-  git -C "$scratch" archive HEAD | tar -x -C "$dest"
+  if [[ -n "$subdir" ]]; then
+    # Archive only the subdirectory the real driver lives in, then strip its
+    # leading path component so $dest's contents match a plain driver repo.
+    git -C "$scratch" archive HEAD -- "$subdir" | tar -x -C "$dest" --strip-components=1
+  else
+    git -C "$scratch" archive HEAD | tar -x -C "$dest"
+  fi
   rm -rf "$scratch"
 }
 
@@ -76,7 +94,7 @@ build_rtl88x2bu_module() {
     return 1
   }
 
-  export_exact_commit "$RTL88X2BU_REPO" "$RTL88X2BU_COMMIT" "$src" || return 1
+  export_exact_commit "$RTL88X2BU_REPO" "$RTL88X2BU_COMMIT" "$src" "$RTL88X2BU_REPO_SUBDIR" || return 1
   test -f "$src/Makefile" || return 1
 
   # Full module pass first: it creates the Module.symvers entries (cfg80211
