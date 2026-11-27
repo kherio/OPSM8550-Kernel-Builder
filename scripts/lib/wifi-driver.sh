@@ -52,6 +52,74 @@ export_exact_commit() {
   rm -rf "$scratch"
 }
 
+# This specific Android GKI kernel (crDroid/SM8550, android14-5.15 branch)
+# backports the MLO-era (Wi-Fi 7 / 802.11be) cfg80211 struct and function
+# shapes -- extra link_id parameters on add_key/get_key/del_key/
+# set_default_key/set_default_mgmt_key/stop_ap/get_channel, struct
+# cfg80211_roam_info.links[0].bssid instead of a bare .bssid, struct
+# wireless_dev.links[0].client.current_bss instead of a bare .current_bss,
+# and a 6-argument cfg80211_ch_switch_(started_)notify() -- onto a tree that
+# still reports its nominal LINUX_VERSION_CODE as 5.15.x (confirmed directly
+# against this kernel's own include/net/cfg80211.h). The driver already
+# contains correct code for every one of these, gated behind
+# LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) / (5,19,2) / (6,0,0), or the
+# (6,3,0 .. 6,9,0) window for the two channel-switch notifiers -- it just
+# never selects it on a kernel that reports 5.15.x. This forces exactly
+# those individually verified branches on for this kernel via one
+# build-local macro, instead of spoofing LINUX_VERSION_CODE itself (which is
+# used kernel-wide for many unrelated things and isn't safe to fake
+# globally). Each replacement count is asserted so a future change to the
+# pinned driver commit fails loudly here instead of silently mis-patching.
+patch_cfg80211_mlo_gates() {
+  local file="$1"
+  python3 - "$file" <<'PYEOF'
+import sys
+
+path = sys.argv[1]
+with open(path, "r") as f:
+    text = f.read()
+
+replacements = [
+    (
+        "(LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))",
+        "((LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0))) || defined(RTW_FORCE_MLO_CFG80211)",
+        2,
+    ),
+    (
+        "(LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))",
+        "((LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)) || defined(RTW_FORCE_MLO_CFG80211))",
+        6,
+    ),
+    (
+        "(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2))",
+        "((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 2)) || defined(RTW_FORCE_MLO_CFG80211))",
+        4,
+    ),
+    (
+        "LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)",
+        "(LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0) || defined(RTW_FORCE_MLO_CFG80211))",
+        1,
+    ),
+]
+
+for old, new, expected_count in replacements:
+    actual_count = text.count(old)
+    if actual_count != expected_count:
+        sys.exit(
+            f"::error::Expected {expected_count} occurrence(s) of {old!r} in {path}, "
+            f"found {actual_count}. The pinned driver source may have changed; "
+            f"re-verify the cfg80211 MLO patch before continuing."
+        )
+    text = text.replace(old, new)
+
+with open(path, "w") as f:
+    f.write(text)
+
+total = sum(c for _, _, c in replacements)
+print(f"::notice::Patched {total} cfg80211 MLO version-gate(s) in {path}.")
+PYEOF
+}
+
 wifi_find_sign_file() {
   local candidate
   for candidate in out/scripts/sign-file scripts/sign-file; do
@@ -96,6 +164,7 @@ build_rtl88x2bu_module() {
 
   export_exact_commit "$RTL88X2BU_REPO" "$RTL88X2BU_COMMIT" "$src" "$RTL88X2BU_REPO_SUBDIR" || return 1
   test -f "$src/Makefile" || return 1
+  patch_cfg80211_mlo_gates "$src/os_dep/linux/ioctl_cfg80211.c" || return 1
 
   # Full module pass first: it creates the Module.symvers entries (cfg80211
   # and friends) the external module is linked against.
@@ -127,7 +196,7 @@ build_rtl88x2bu_module() {
   # -Werror back off for this one out-of-tree, third-party module only; the
   # kernel's own first-party code still builds with CONFIG_WERROR=y
   # untouched.
-  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS="-Wno-unknown-warning-option -Wno-error" -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
+  make -j"$(nproc)" "${MAKE_ARGS[@]}" CONFIG_RTL8822BU=m KCFLAGS="-Wno-unknown-warning-option -Wno-error -DRTW_FORCE_MLO_CFG80211=1" -C "$PWD" M="$PWD/$src" modules 2>&1 | tee -a wifi-modules-build.log
   [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "::error::RTL88x2BU external module build failed."; return 1; }
 
   ko="$src/${RTL88X2BU_MODULE_NAME}.ko"
